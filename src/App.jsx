@@ -2,8 +2,10 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   LayoutDashboard, ListChecks, Plus, Search, Pencil, Eye, Copy, Trash2,
   CheckCircle2, XCircle, AlertCircle, ChevronUp, ChevronDown, Upload,
-  ArrowLeft, Save, X, Lock, Play, Clock, Flag, Download,
+  ArrowLeft, Save, X, Lock, Play, Clock, Flag, Download, LogOut,
 } from "lucide-react";
+import { loadMocksIndex, saveMocksIndex, loadMockQuestions, saveMockQuestions, deleteMockQuestions } from "./lib/storage";
+import { signIn, signOut, getSession, onAuthStateChange } from "./lib/auth";
 
 // ============================================================================
 // MATH RENDERING
@@ -248,45 +250,10 @@ function normalizeSectionLabel(input) {
 
 // ============================================================================
 // STORAGE
-// Standalone equivalent of the artifact platform's window.storage API — this
-// app previously ran only inside a Claude artifact, where window.storage is
-// provided by the host. Outside Claude that API doesn't exist, so this is
-// the one Claude-specific runtime dependency the app had. Replaced with the
-// browser's own localStorage, wrapped behind the exact same function names
-// and async signatures used everywhere else in this file, so no other call
-// site anywhere in Admin or Student needed to change.
+// Supabase-backed — see src/lib/storage.js. Same five function names/async
+// signatures the rest of this file already expects, so nothing below this
+// point needed to change when the backend moved off localStorage.
 // ============================================================================
-const LS_PREFIX = "ssccgl:";
-
-async function loadMocksIndex() {
-  try {
-    const raw = localStorage.getItem(`${LS_PREFIX}admin:mocks-index`);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-async function saveMocksIndex(list) {
-  localStorage.setItem(`${LS_PREFIX}admin:mocks-index`, JSON.stringify(list));
-}
-async function loadMockQuestions(mockId) {
-  try {
-    const raw = localStorage.getItem(`${LS_PREFIX}admin:mock:${mockId}:questions`);
-    return raw ? JSON.parse(raw) : emptySectionMap();
-  } catch {
-    return emptySectionMap();
-  }
-}
-async function saveMockQuestions(mockId, data) {
-  localStorage.setItem(`${LS_PREFIX}admin:mock:${mockId}:questions`, JSON.stringify(data));
-}
-async function deleteMockQuestions(mockId) {
-  try {
-    localStorage.removeItem(`${LS_PREFIX}admin:mock:${mockId}:questions`);
-  } catch {
-    /* key may not exist yet — fine */
-  }
-}
 
 // ============================================================================
 // VALIDATION — all-or-nothing: any invalid row blocks the entire import
@@ -2139,7 +2106,7 @@ function AdminPanel() {
           </button>
         </div>
         <div className="px-4 py-3 border-t border-slate-800 flex items-center gap-1.5 text-[11px] text-slate-500">
-          <Lock size={11} /> No login gate in this preview
+          <Lock size={11} /> Protected by Supabase Auth
         </div>
       </aside>
 
@@ -2515,114 +2482,75 @@ function StudentApp() {
 //
 // ACCESS NOTE: routing below decides which experience renders based on the
 // URL path (/admin vs anything else) and nothing in the Student UI links to
-// or reveals /admin — so a normal visitor never sees an admin option. This
-// is NOT real authentication: there is no backend, so anyone who knows or
-// guesses the /admin path can open it. It's "not discoverable," not "not
-// accessible." Wiring real auth (e.g. Supabase Auth) in front of the /admin
-// route is exactly the kind of thing to add once a real backend exists —
-// the routing seam here is deliberately where that would plug in later.
+// or reveals /admin — so a normal visitor never sees an admin option.
 //
-// ADMIN ACCESS GATE
-// This is a client-side password check. The password lives in this
-// JavaScript bundle, which anyone can read via browser dev tools — so a
-// technically determined person can find it, or simply skip calling this
-// component by editing the page's JS in their own browser. This is NOT
-// real authentication. It stops a casual visitor from stumbling into
-// /admin or guessing the path and getting straight in. It does NOT stop
-// someone who deliberately goes looking for the password in the bundle.
-// Real protection requires a server that checks credentials before ever
-// sending admin data to the browser — that's what Supabase Auth (or
-// equivalent) in front of a real backend gives you.
-//
-// CHANGE ADMIN_PASSWORD_HASH BELOW BEFORE DEPLOYING — see instructions further down.
+// ADMIN ACCESS GATE — real Supabase Auth. AdminGate renders its children
+// only once a genuine Supabase session exists, established by
+// supabase.auth.signInWithPassword against the admin user created in the
+// Supabase dashboard (see src/lib/auth.js) — no password lives in this
+// bundle anymore. The actual enforcement point is Row Level Security on the
+// `mocks`/`questions` tables in Supabase: draft mocks and all writes are
+// rejected by the database itself for anyone without a valid session, even
+// if this component were bypassed entirely.
 // ============================================================================
-
-// ADMIN_PASSWORD is no longer stored as visible plain text — a casual look
-// at the source (or this GitHub repo) no longer shows your actual password.
-// This is still a client-side check and can still be defeated by someone
-// deliberately reverse-engineering the hash or reading it out of network
-// traffic — hashing raises the bar, it does not make this a real backend
-// auth system. See the comment block above for what that would take.
-//
-// To change the password: open the browser console on ANY website, run:
-//   crypto.subtle.digest("SHA-256", new TextEncoder().encode("yourNewPassword"))
-//     .then(b => console.log(Array.from(new Uint8Array(b)).map(x => x.toString(16).padStart(2,"0")).join("")))
-// and paste the printed hash below.
-const ADMIN_PASSWORD_HASH = "41281b3a3cd5edea39c31830cbecf984217115fe82227b82dc12356b494e76dd"; // <-- password changed, see chat for the actual password
-
-async function sha256(text) {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-const MAX_ATTEMPTS = 5;
-const LOCKOUT_MINUTES = 10;
-
 function AdminGate({ children }) {
-  const [unlocked, setUnlocked] = useState(() => sessionStorage.getItem("ssccgl:admin-unlocked") === "1");
-  const [input, setInput] = useState("");
+  const [session, setSession] = useState(undefined); // undefined = checking, null = signed out
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [checking, setChecking] = useState(false);
-  const [lockedUntil, setLockedUntil] = useState(() => {
-    const stored = Number(localStorage.getItem("ssccgl:admin-lockout-until") || 0);
-    return stored > Date.now() ? stored : 0;
-  });
+
+  useEffect(() => {
+    getSession().then(setSession);
+    return onAuthStateChange(setSession);
+  }, []);
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (lockedUntil > Date.now()) return;
-
+    setError("");
     setChecking(true);
-    const hash = await sha256(input);
-    setChecking(false);
-
-    if (hash === ADMIN_PASSWORD_HASH) {
-      sessionStorage.setItem("ssccgl:admin-unlocked", "1");
-      localStorage.removeItem("ssccgl:admin-attempts");
-      localStorage.removeItem("ssccgl:admin-lockout-until");
-      setUnlocked(true);
-      setError("");
-    } else {
-      const attempts = Number(localStorage.getItem("ssccgl:admin-attempts") || 0) + 1;
-      localStorage.setItem("ssccgl:admin-attempts", String(attempts));
-      if (attempts >= MAX_ATTEMPTS) {
-        const until = Date.now() + LOCKOUT_MINUTES * 60 * 1000;
-        localStorage.setItem("ssccgl:admin-lockout-until", String(until));
-        setLockedUntil(until);
-        setError(`Too many attempts. Locked for ${LOCKOUT_MINUTES} minutes.`);
-      } else {
-        setError(`Incorrect password. ${MAX_ATTEMPTS - attempts} attempt${MAX_ATTEMPTS - attempts === 1 ? "" : "s"} remaining before lockout.`);
-      }
+    try {
+      await signIn(email, password);
+    } catch (err) {
+      setError(err.message || "Sign-in failed.");
+    } finally {
+      setChecking(false);
     }
   }
 
-  if (unlocked) return children;
+  if (session === undefined) {
+    return <div className="min-h-screen flex items-center justify-center text-sm text-slate-400">Loading...</div>;
+  }
 
-  const isLocked = lockedUntil > Date.now();
-  const minutesLeft = isLocked ? Math.ceil((lockedUntil - Date.now()) / 60000) : 0;
+  if (session) return children;
 
   return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
       <form onSubmit={handleSubmit} className="bg-white rounded-2xl p-8 max-w-sm w-full">
         <h1 className="text-lg font-semibold text-slate-800 mb-1">Admin Access</h1>
-        <p className="text-xs text-slate-400 mb-5">This area is not linked from the student site.</p>
+        <p className="text-xs text-slate-400 mb-5">Sign in with your admin account.</p>
+        <input
+          type="email"
+          autoFocus
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="Email"
+          className="w-full text-sm border border-slate-200 rounded-md px-3 py-2.5 mb-3"
+        />
         <input
           type="password"
-          autoFocus
-          disabled={isLocked}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
           placeholder="Password"
-          className="w-full text-sm border border-slate-200 rounded-md px-3 py-2.5 mb-3 disabled:bg-slate-50"
+          className="w-full text-sm border border-slate-200 rounded-md px-3 py-2.5 mb-3"
         />
         {error && <p className="text-xs text-red-600 mb-3">{error}</p>}
-        {isLocked && <p className="text-xs text-amber-600 mb-3">Try again in {minutesLeft} minute{minutesLeft === 1 ? "" : "s"}.</p>}
         <button
           type="submit"
-          disabled={isLocked || checking}
+          disabled={checking}
           className="w-full bg-blue-900 text-white text-sm font-medium rounded-lg py-2.5 disabled:opacity-50"
         >
-          {checking ? "Checking..." : "Enter"}
+          {checking ? "Signing in..." : "Sign in"}
         </button>
       </form>
     </div>
@@ -2644,7 +2572,10 @@ export default function App() {
     return (
       <AdminGate>
         <div>
-          <div className="bg-slate-900 px-4 py-1.5 flex justify-end">
+          <div className="bg-slate-900 px-4 py-1.5 flex items-center justify-between">
+            <button onClick={signOut} className="flex items-center gap-1 text-[11px] text-slate-300 hover:text-white">
+              <LogOut size={11} /> Sign out
+            </button>
             <a href="/" className="text-[11px] text-slate-300 hover:text-white">
               View as Student →
             </a>
