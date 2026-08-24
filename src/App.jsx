@@ -2548,7 +2548,7 @@ function StudentApp() {
 //   crypto.subtle.digest("SHA-256", new TextEncoder().encode("yourNewPassword"))
 //     .then(b => console.log(Array.from(new Uint8Array(b)).map(x => x.toString(16).padStart(2,"0")).join("")))
 // and paste the printed hash below.
-const ADMIN_PASSWORD_HASH = "494a715f7e9b4071aca61bac42ca858a309524e5864f0920030862a4ae7589be"; // sha-256 of "changeme123" — CHANGE THIS
+const ADMIN_PASSWORD_HASH = "41281b3a3cd5edea39c31830cbecf984217115fe82227b82dc12356b494e76dd"; // <-- password changed, see chat for the actual password
 
 async function sha256(text) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
