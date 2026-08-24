@@ -2534,27 +2534,72 @@ function StudentApp() {
 // sending admin data to the browser — that's what Supabase Auth (or
 // equivalent) in front of a real backend gives you.
 //
-// CHANGE ADMIN_PASSWORD BELOW BEFORE DEPLOYING.
+// CHANGE ADMIN_PASSWORD_HASH BELOW BEFORE DEPLOYING — see instructions further down.
 // ============================================================================
-const ADMIN_PASSWORD = "changeme123"; // <-- change this before you deploy
+
+// ADMIN_PASSWORD is no longer stored as visible plain text — a casual look
+// at the source (or this GitHub repo) no longer shows your actual password.
+// This is still a client-side check and can still be defeated by someone
+// deliberately reverse-engineering the hash or reading it out of network
+// traffic — hashing raises the bar, it does not make this a real backend
+// auth system. See the comment block above for what that would take.
+//
+// To change the password: open the browser console on ANY website, run:
+//   crypto.subtle.digest("SHA-256", new TextEncoder().encode("yourNewPassword"))
+//     .then(b => console.log(Array.from(new Uint8Array(b)).map(x => x.toString(16).padStart(2,"0")).join("")))
+// and paste the printed hash below.
+const ADMIN_PASSWORD_HASH = "494a715f7e9b4071aca61bac42ca858a309524e5864f0920030862a4ae7589be"; // sha-256 of "changeme123" — CHANGE THIS
+
+async function sha256(text) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+const MAX_ATTEMPTS = 5;
+const LOCKOUT_MINUTES = 10;
 
 function AdminGate({ children }) {
   const [unlocked, setUnlocked] = useState(() => sessionStorage.getItem("ssccgl:admin-unlocked") === "1");
   const [input, setInput] = useState("");
   const [error, setError] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [lockedUntil, setLockedUntil] = useState(() => {
+    const stored = Number(localStorage.getItem("ssccgl:admin-lockout-until") || 0);
+    return stored > Date.now() ? stored : 0;
+  });
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
-    if (input === ADMIN_PASSWORD) {
+    if (lockedUntil > Date.now()) return;
+
+    setChecking(true);
+    const hash = await sha256(input);
+    setChecking(false);
+
+    if (hash === ADMIN_PASSWORD_HASH) {
       sessionStorage.setItem("ssccgl:admin-unlocked", "1");
+      localStorage.removeItem("ssccgl:admin-attempts");
+      localStorage.removeItem("ssccgl:admin-lockout-until");
       setUnlocked(true);
       setError("");
     } else {
-      setError("Incorrect password.");
+      const attempts = Number(localStorage.getItem("ssccgl:admin-attempts") || 0) + 1;
+      localStorage.setItem("ssccgl:admin-attempts", String(attempts));
+      if (attempts >= MAX_ATTEMPTS) {
+        const until = Date.now() + LOCKOUT_MINUTES * 60 * 1000;
+        localStorage.setItem("ssccgl:admin-lockout-until", String(until));
+        setLockedUntil(until);
+        setError(`Too many attempts. Locked for ${LOCKOUT_MINUTES} minutes.`);
+      } else {
+        setError(`Incorrect password. ${MAX_ATTEMPTS - attempts} attempt${MAX_ATTEMPTS - attempts === 1 ? "" : "s"} remaining before lockout.`);
+      }
     }
   }
 
   if (unlocked) return children;
+
+  const isLocked = lockedUntil > Date.now();
+  const minutesLeft = isLocked ? Math.ceil((lockedUntil - Date.now()) / 60000) : 0;
 
   return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
@@ -2564,14 +2609,20 @@ function AdminGate({ children }) {
         <input
           type="password"
           autoFocus
+          disabled={isLocked}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Password"
-          className="w-full text-sm border border-slate-200 rounded-md px-3 py-2.5 mb-3"
+          className="w-full text-sm border border-slate-200 rounded-md px-3 py-2.5 mb-3 disabled:bg-slate-50"
         />
         {error && <p className="text-xs text-red-600 mb-3">{error}</p>}
-        <button type="submit" className="w-full bg-blue-900 text-white text-sm font-medium rounded-lg py-2.5">
-          Enter
+        {isLocked && <p className="text-xs text-amber-600 mb-3">Try again in {minutesLeft} minute{minutesLeft === 1 ? "" : "s"}.</p>}
+        <button
+          type="submit"
+          disabled={isLocked || checking}
+          className="w-full bg-blue-900 text-white text-sm font-medium rounded-lg py-2.5 disabled:opacity-50"
+        >
+          {checking ? "Checking..." : "Enter"}
         </button>
       </form>
     </div>
