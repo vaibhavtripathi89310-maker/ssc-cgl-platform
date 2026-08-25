@@ -94,6 +94,7 @@ export async function loadMockQuestions(mockId) {
       answer: r.answer,
       explanation: r.explanation,
       difficulty: r.difficulty,
+      topic: r.topic ?? null,
     });
   }
   return map;
@@ -122,6 +123,7 @@ export async function saveMockQuestions(mockId, data) {
         answer: q.answer,
         explanation: q.explanation,
         difficulty: q.difficulty,
+        topic: q.topic ?? null,
       });
     });
   }

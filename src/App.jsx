@@ -219,6 +219,7 @@ const DIFFICULTY_COLORS = {
   "Crazy Hard": "bg-purple-100 text-purple-700",
 };
 const LETTERS = ["A", "B", "C", "D"];
+const YOUTUBE_CHANNEL_URL = "https://www.youtube.com/@the100percentiler";
 
 // ============================================================================
 // PURE HELPERS
@@ -329,6 +330,10 @@ function validateImportJSON(rawText, sectionKey, existingIdsInMock, currentCount
       answer: q.answer,
       explanation: q.explanation.trim(),
       difficulty: DIFFICULTIES.includes(q.difficulty) ? q.difficulty : "Moderate",
+      // Optional — powers the post-test "topic-wise performance" breakdown.
+      // Falls back to the section label when absent, so this is never
+      // required and never blocks an import.
+      topic: typeof q.topic === "string" && q.topic.trim() ? q.topic.trim() : null,
     });
   });
 
@@ -880,7 +885,7 @@ function MockEditorView({ mock, questions, onSaveMeta, onOpenSection, onTogglePu
 // ============================================================================
 function QuestionForm({ initial, onSave, onCancel }) {
   const [q, setQ] = useState(
-    initial || { id: generateId("q"), text: "", options: ["", "", "", ""], answer: 0, explanation: "", difficulty: "Moderate" }
+    initial || { id: generateId("q"), text: "", options: ["", "", "", ""], answer: 0, explanation: "", difficulty: "Moderate", topic: "" }
   );
   return (
     <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-2.5">
@@ -919,15 +924,23 @@ function QuestionForm({ initial, onSave, onCancel }) {
         rows={2}
         className="w-full text-sm border border-slate-200 rounded-md px-3 py-2"
       />
-      <select
-        value={q.difficulty}
-        onChange={(e) => setQ({ ...q, difficulty: e.target.value })}
-        className="text-sm border border-slate-200 rounded-md px-3 py-1.5"
-      >
-        {DIFFICULTIES.map((d) => (
-          <option key={d}>{d}</option>
-        ))}
-      </select>
+      <div className="flex items-center gap-2">
+        <select
+          value={q.difficulty}
+          onChange={(e) => setQ({ ...q, difficulty: e.target.value })}
+          className="text-sm border border-slate-200 rounded-md px-3 py-1.5"
+        >
+          {DIFFICULTIES.map((d) => (
+            <option key={d}>{d}</option>
+          ))}
+        </select>
+        <input
+          value={q.topic || ""}
+          onChange={(e) => setQ({ ...q, topic: e.target.value })}
+          placeholder="Topic (optional, e.g. Percentages)"
+          className="flex-1 text-sm border border-slate-200 rounded-md px-3 py-1.5"
+        />
+      </div>
       <div className="flex justify-end gap-2 pt-1">
         <button onClick={onCancel} className="text-xs px-3 py-1.5 rounded-md border border-slate-200 text-slate-600">
           Cancel
@@ -935,7 +948,7 @@ function QuestionForm({ initial, onSave, onCancel }) {
         <button
           onClick={() => {
             if (!q.text.trim() || q.options.some((o) => !o.trim()) || !q.explanation.trim()) return;
-            onSave(q);
+            onSave({ ...q, topic: q.topic && q.topic.trim() ? q.topic.trim() : null });
           }}
           className="text-xs px-3 py-1.5 rounded-md bg-blue-900 text-white"
         >
@@ -1120,7 +1133,7 @@ function SectionManager({ mockId, mock, sectionKey, questions, onQuestionsChange
           value={jsonText}
           onChange={(e) => setJsonText(e.target.value)}
           rows={8}
-          placeholder={`[\n  {\n    "id": "quant_001",\n    "section": "${sectionLabel(sectionKey)}",\n    "text": "...",\n    "options": ["...", "...", "...", "..."],\n    "answer": 0,\n    "explanation": "..."\n  }\n]`}
+          placeholder={`[\n  {\n    "id": "quant_001",\n    "section": "${sectionLabel(sectionKey)}",\n    "topic": "Percentages",\n    "text": "...",\n    "options": ["...", "...", "...", "..."],\n    "answer": 0,\n    "explanation": "..."\n  }\n]`}
           className="w-full text-xs font-mono border border-slate-200 rounded-md p-3 focus:outline-none focus:ring-2 focus:ring-blue-200"
         />
         <div className="flex items-center gap-2 mt-2">
@@ -1411,6 +1424,7 @@ function RunMockView({ mock, questions, onExit }) {
   const [finished, setFinished] = useState(false);
   const [toast, setToast] = useState("");
   const [confirmAction, setConfirmAction] = useState(null); // 'next-section' | 'finish' | null
+  const [timeSpent, setTimeSpent] = useState({}); // questionId -> seconds spent on it
 
   const section = sections[sectionIdx];
   const list = section ? questions[section.key] || [] : [];
@@ -1422,13 +1436,29 @@ function RunMockView({ mock, questions, onExit }) {
     if (q) setVisited((v) => (v[q.id] ? v : { ...v, [q.id]: true }));
   }, [q]);
 
+  // Per-question time tracking for the post-test "time analysis" — accumulates
+  // into timeSpent[q.id] every time the student navigates away from a
+  // question (including moving sections or finishing), so it survives
+  // revisits within the same section and doesn't require touching every
+  // render.
+  const questionEnterRef = useRef(Date.now());
+  function flushTime() {
+    if (!q) return;
+    const elapsed = Math.round((Date.now() - questionEnterRef.current) / 1000);
+    questionEnterRef.current = Date.now();
+    if (elapsed <= 0) return;
+    setTimeSpent((t) => ({ ...t, [q.id]: (t[q.id] || 0) + elapsed }));
+  }
+
   function goToSection(nextIdx) {
+    flushTime();
     setSectionIdx(nextIdx);
     setQIdx(0);
     setTimeLeft(perSectionSeconds);
   }
 
   const advanceSection = useCallback(() => {
+    flushTime();
     if (isLastSection) {
       setFinished(true);
       return;
@@ -1437,7 +1467,8 @@ function RunMockView({ mock, questions, onExit }) {
     setSectionIdx((i) => i + 1);
     setQIdx(0);
     setTimeLeft(perSectionSeconds);
-  }, [isLastSection, section, perSectionSeconds]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLastSection, section, perSectionSeconds, q]);
 
   useEffect(() => {
     if (finished) return;
@@ -1470,13 +1501,17 @@ function RunMockView({ mock, questions, onExit }) {
       return next;
     });
   }
+  function goToQuestion(idx) {
+    flushTime();
+    setQIdx(idx);
+  }
   function saveAndNext() {
     setSaved((s) => ({ ...s, [q.id]: true }));
-    if (qIdx < list.length - 1) setQIdx((x) => x + 1);
+    if (qIdx < list.length - 1) goToQuestion(qIdx + 1);
   }
   function toggleMarkForReview() {
     setMarked((m) => ({ ...m, [q.id]: !m[q.id] }));
-    if (qIdx < list.length - 1) setQIdx((x) => x + 1);
+    if (qIdx < list.length - 1) goToQuestion(qIdx + 1);
   }
 
   // "Next section" and "Finish" are always available, from any question — not
@@ -1490,8 +1525,12 @@ function RunMockView({ mock, questions, onExit }) {
     setConfirmAction("finish");
   }
   function confirmProceed() {
-    if (confirmAction === "finish") setFinished(true);
-    else if (confirmAction === "next-section") goToSection(sectionIdx + 1);
+    if (confirmAction === "finish") {
+      flushTime();
+      setFinished(true);
+    } else if (confirmAction === "next-section") {
+      goToSection(sectionIdx + 1);
+    }
     setConfirmAction(null);
   }
 
@@ -1528,6 +1567,45 @@ function RunMockView({ mock, questions, onExit }) {
       return { label: s.label, correct: sCorrect, incorrect: sIncorrect, skipped: sSkipped, score: sCorrect * 2 - sIncorrect * mock.negativeMarking };
     });
     const score = correct * 2 - incorrect * mock.negativeMarking;
+
+    // Topic-wise performance — groups by each question's tagged topic, or
+    // falls back to its section label when no topic was set on it (so this
+    // is always useful even for mocks made before topics existed).
+    const topicStats = {};
+    sections.forEach((s) => {
+      (questions[s.key] || []).forEach((qq) => {
+        const key = qq.topic || s.label;
+        if (!topicStats[key]) topicStats[key] = { correct: 0, total: 0 };
+        topicStats[key].total += 1;
+        if (answers[qq.id] === qq.answer) topicStats[key].correct += 1;
+      });
+    });
+    const topicRows = Object.entries(topicStats)
+      .map(([topic, v]) => ({ topic, ...v, accuracy: v.correct / v.total }))
+      .sort((a, b) => a.accuracy - b.accuracy);
+    const weakTopics = topicRows.filter((t) => t.accuracy < 0.4).map((t) => t.topic);
+    const strongTopics = topicRows.filter((t) => t.accuracy >= 0.7).map((t) => t.topic);
+    function topicBadge(accuracy) {
+      if (accuracy < 0.4) return { label: "Needs revision", cls: "bg-red-100 text-red-700" };
+      if (accuracy < 0.7) return { label: "Getting there", cls: "bg-amber-100 text-amber-700" };
+      return { label: "Strong", cls: "bg-emerald-100 text-emerald-700" };
+    }
+
+    // Time analysis — colors each question relative to a "fair" pace (the
+    // section's time budget split evenly across its questions), not a fixed
+    // number of seconds, so it stays meaningful across mocks of any length.
+    function parTimeFor(sectionKey) {
+      return perSectionSeconds / ((questions[sectionKey] || []).length || 1);
+    }
+    function timeBadge(qq, sectionKey) {
+      const t = timeSpent[qq.id] || 0;
+      const par = parTimeFor(sectionKey);
+      if (t === 0) return "bg-slate-100 text-slate-400 border-slate-200";
+      if (t <= par * 0.5) return "bg-emerald-100 text-emerald-700 border-emerald-200";
+      if (t <= par * 1.5) return "bg-amber-100 text-amber-700 border-amber-200";
+      return "bg-red-100 text-red-700 border-red-200";
+    }
+
     return (
       <div className="min-h-screen bg-slate-100 flex flex-col items-center py-10 px-4">
         <div className="max-w-md w-full text-center bg-white border border-slate-200 rounded-2xl shadow-sm p-10">
@@ -1559,6 +1637,66 @@ function RunMockView({ mock, questions, onExit }) {
         </div>
 
         <div className="max-w-2xl w-full mt-6 space-y-3">
+          <div className="bg-white border border-slate-200 rounded-xl p-5 text-left">
+            <h3 className="text-sm font-semibold text-slate-700 mb-1">Time analysis</h3>
+            <p className="text-xs text-slate-400 mb-4">How long you spent on each question, compared to a fair pace for this test.</p>
+            <div className="flex items-center gap-3 text-[11px] text-slate-500 mb-4 flex-wrap">
+              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-emerald-100 border border-emerald-200" /> Quick</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-amber-100 border border-amber-200" /> Normal pace</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-red-100 border border-red-200" /> Took long</span>
+            </div>
+            {sections.map((s) => {
+              const sList = questions[s.key] || [];
+              if (sList.length === 0) return null;
+              return (
+                <div key={s.key} className="mb-4 last:mb-0">
+                  {sections.length > 1 && <div className="text-xs font-medium text-slate-500 mb-2">{s.label}</div>}
+                  <div className="grid grid-cols-5 sm:grid-cols-8 gap-2">
+                    {sList.map((qq, i) => (
+                      <div
+                        key={qq.id}
+                        title={`${s.label} · Q${i + 1} — ${formatTime(timeSpent[qq.id] || 0)}`}
+                        className={`rounded-md border text-center py-1.5 ${timeBadge(qq, s.key)}`}
+                      >
+                        <div className="text-[10px] font-semibold">{i + 1}</div>
+                        <div className="text-[10px]">{formatTime(timeSpent[qq.id] || 0)}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-xl p-5 text-left">
+            <h3 className="text-sm font-semibold text-slate-700 mb-1">Topic-wise performance</h3>
+            <p className="text-xs text-slate-400 mb-4">Where to focus your revision, based on this attempt.</p>
+            {weakTopics.length > 0 && (
+              <div className="bg-red-50 border border-red-200 rounded-md px-3 py-2 text-xs text-red-700 mb-2">
+                📌 Focus your revision on: <span className="font-medium">{weakTopics.join(", ")}</span>
+              </div>
+            )}
+            {strongTopics.length > 0 && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2 text-xs text-emerald-700 mb-4">
+                ✅ You're doing well in: <span className="font-medium">{strongTopics.join(", ")}</span>
+              </div>
+            )}
+            <div className="space-y-1.5">
+              {topicRows.map((t) => {
+                const badge = topicBadge(t.accuracy);
+                return (
+                  <div key={t.topic} className="flex items-center justify-between text-xs bg-slate-50 rounded-md px-3 py-2">
+                    <span className="text-slate-600">{t.topic}</span>
+                    <span className="flex items-center gap-2">
+                      <span className="text-slate-400">{t.correct}/{t.total}</span>
+                      <span className={`px-2 py-0.5 rounded-full font-medium ${badge.cls}`}>{badge.label}</span>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           <h3 className="text-sm font-semibold text-slate-700 px-1">Answer review</h3>
           {sections.map((s) =>
             (questions[s.key] || []).map((qq, i) => {
@@ -1607,6 +1745,23 @@ function RunMockView({ mock, questions, onExit }) {
               );
             })
           )}
+        </div>
+
+        <div className="max-w-2xl w-full mt-6">
+          <a
+            href={YOUTUBE_CHANNEL_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block bg-gradient-to-r from-red-600 to-red-500 text-white rounded-2xl p-6 text-center hover:opacity-95 transition-opacity"
+          >
+            <div className="text-sm font-semibold mb-1">Want to seriously prepare for SSC CGL?</div>
+            <div className="text-xs text-red-50 mb-3">
+              Get free strategy sessions, topic breakdowns, and more mocks on our YouTube channel.
+            </div>
+            <span className="inline-block bg-white text-red-600 text-sm font-medium px-4 py-2 rounded-lg">
+              Visit The 100 Percentiler →
+            </span>
+          </a>
         </div>
       </div>
     );
@@ -1729,7 +1884,7 @@ function RunMockView({ mock, questions, onExit }) {
               <div className="flex gap-2">
                 <button
                   disabled={qIdx === 0}
-                  onClick={() => setQIdx((x) => x - 1)}
+                  onClick={() => goToQuestion(qIdx - 1)}
                   className="text-sm px-4 py-2.5 rounded-lg border border-slate-300 text-slate-600 bg-white disabled:opacity-40"
                 >
                   Previous
@@ -1748,7 +1903,7 @@ function RunMockView({ mock, questions, onExit }) {
                 </button>
                 <button
                   disabled={qIdx === list.length - 1}
-                  onClick={() => setQIdx((x) => x + 1)}
+                  onClick={() => goToQuestion(qIdx + 1)}
                   className="text-sm px-4 py-2.5 rounded-lg border border-slate-300 text-slate-600 bg-white disabled:opacity-40"
                 >
                   Next
@@ -1786,7 +1941,7 @@ function RunMockView({ mock, questions, onExit }) {
               return (
                 <button
                   key={qq.id}
-                  onClick={() => setQIdx(i)}
+                  onClick={() => goToQuestion(i)}
                   className={`aspect-square rounded-md text-xs font-semibold border-2 ${STATUS_STYLE[status]} ${
                     i === qIdx ? "ring-2 ring-offset-1 ring-blue-500" : ""
                   }`}
