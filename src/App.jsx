@@ -110,15 +110,21 @@ function parseMathSegment(segment, keyPrefix) {
     }
 
     if (segment[i] === "_") {
-      flush();
       const { text, next } = grabGroup(segment, i + 1);
-      nodes.push(
-        <sub key={`${keyPrefix}-b${key++}`} style={{ fontSize: "0.75em" }}>
-          {parseMathSegment(text, `${keyPrefix}-b${key}`)}
-        </sub>
-      );
-      i = next;
-      continue;
+      // An underscore with nothing valid after it (another underscore, a
+      // space, end of string...) isn't math subscript notation — it's very
+      // likely a fill-in-the-blank marker like "___". Treat it as a literal
+      // character instead of silently swallowing it into an empty <sub>.
+      if (text) {
+        flush();
+        nodes.push(
+          <sub key={`${keyPrefix}-b${key++}`} style={{ fontSize: "0.75em" }}>
+            {parseMathSegment(text, `${keyPrefix}-b${key}`)}
+          </sub>
+        );
+        i = next;
+        continue;
+      }
     }
 
     buffer += segment[i];
