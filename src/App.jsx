@@ -2874,7 +2874,7 @@ function StudentMockCard({ mock, onStart }) {
   );
 }
 
-function StudentInstructionsView({ mock, questionCount, onStart, onBack }) {
+function StudentInstructionsView({ mock, questionCount, onStart, onBack, viaChallenge }) {
   const sections = sectionsForMock(mock);
   const isSectional = getMockType(mock) === MOCK_TYPES.SECTIONAL;
 
@@ -2887,6 +2887,11 @@ function StudentInstructionsView({ mock, questionCount, onStart, onBack }) {
         </span>
         <h1 className="text-xl font-semibold text-slate-800 mb-1">{mock.title}</h1>
         {mock.description && <p className="text-sm text-slate-500 mb-5">{mock.description}</p>}
+        {viaChallenge && (
+          <div className="bg-blue-50 border border-blue-200 rounded-md px-3 py-2 text-xs text-blue-800 mb-5 flex items-center gap-2">
+            <Swords size={14} className="shrink-0" /> Finish this test to get a link you can send to a friend to challenge them.
+          </div>
+        )}
 
         <div className="grid grid-cols-3 gap-3 mb-6">
           <div className="bg-slate-50 rounded-lg p-3 text-center">
@@ -3308,7 +3313,13 @@ function StudentApp() {
     const questionCount = sections.reduce((sum, s) => sum + (selectedQuestions[s.key]?.length || 0), 0);
     return (
       <div className="min-h-screen bg-slate-50 p-6">
-        <StudentInstructionsView mock={selectedMock} questionCount={questionCount} onStart={startTest} onBack={backToList} />
+        <StudentInstructionsView
+          mock={selectedMock}
+          questionCount={questionCount}
+          onStart={startTest}
+          onBack={backToList}
+          viaChallenge={typeFilter === "all"}
+        />
       </div>
     );
   }
@@ -3339,7 +3350,7 @@ function StudentApp() {
             <div className="flex items-center gap-2 mb-3">
               <span className="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-white/20">1v1</span>
               <span
-                title="Take any mock, then send the link to a friend. Once they finish it too, you'll both see a full side-by-side answer sheet — every question, both people's answers, and how much time each of you took — plus you can send them a 👍 or 👎."
+                title="Take any mock, then send the link to a friend. Once they finish it too, you'll both be able to see a full side-by-side answer sheet — every question, both people's answers, and how much time each of you took."
                 className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-white/20 text-white text-[10px] font-bold cursor-help"
               >
                 i
