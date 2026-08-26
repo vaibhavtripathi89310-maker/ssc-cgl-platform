@@ -411,21 +411,52 @@ function ConfirmModal({ title, body, confirmLabel, danger, onConfirm, onCancel }
 }
 
 // ============================================================================
-// ANALYTICS — admin-only. Unique devices / total attempts / per-mock
-// breakdown, over any date range the admin picks (or all time). Reuses the
-// same `attempts` rows that already power percentile/leaderboard — just
-// aggregated a different way, client-side, since the row count is small.
+// ANALYTICS — admin-only. Everything here is derived from the `attempts`
+// table already being written to for percentile/leaderboard/progress — no
+// new schema, just aggregated several different ways, client-side (row
+// counts here are small enough that this is never a real cost). Sections:
+// overview, daily trend, per-mock breakdown, audience-wide weak topics
+// (aggregated from topicBreakdown — tells the admin what content to make
+// next), and toughest individual questions (cross-referenced from each
+// attempt's raw per-question answers against the real question list).
 // ============================================================================
 function AnalyticsView({ mocksIndex }) {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState([]);
+  const [questionStats, setQuestionStats] = useState({});
 
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      setRows(await loadAttemptsInRange({ from, to }));
+      const data = await loadAttemptsInRange({ from, to });
+      setRows(data);
+
+      // Toughest questions needs the real question list (text + correct
+      // answer) for every mock that was actually attempted in this range —
+      // fetched once per distinct mock, not per attempt.
+      const mockIds = [...new Set(data.map((r) => r.mockId))];
+      const questionMaps = await Promise.all(mockIds.map((id) => loadMockQuestions(id).catch(() => ({}))));
+      const qLookup = {};
+      mockIds.forEach((mockId, i) => {
+        Object.values(questionMaps[i]).forEach((list) => {
+          (list || []).forEach((q) => {
+            qLookup[q.id] = { text: q.text, answer: q.answer, topic: q.topic, mockId };
+          });
+        });
+      });
+      const stats = {};
+      data.forEach((r) => {
+        Object.entries(r.answers || {}).forEach(([qId, selected]) => {
+          const q = qLookup[qId];
+          if (!q) return;
+          if (!stats[qId]) stats[qId] = { attempted: 0, correct: 0, text: q.text, topic: q.topic, mockId: q.mockId };
+          stats[qId].attempted += 1;
+          if (selected === q.answer) stats[qId].correct += 1;
+        });
+      });
+      setQuestionStats(stats);
     } finally {
       setLoading(false);
     }
@@ -447,13 +478,46 @@ function AnalyticsView({ mocksIndex }) {
     setTo("");
   }
 
-  const uniqueDevices = new Set(rows.map((r) => r.device_id)).size;
+  // --- Overview ---
+  const uniqueDevices = new Set(rows.map((r) => r.deviceId)).size;
+  const attemptsPerDevice = {};
+  rows.forEach((r) => {
+    attemptsPerDevice[r.deviceId] = (attemptsPerDevice[r.deviceId] || 0) + 1;
+  });
+  const returningDevices = Object.values(attemptsPerDevice).filter((n) => n >= 2).length;
+  const oneTimeDevices = uniqueDevices - returningDevices;
+  const avgAccuracy = rows.length
+    ? Math.round(
+        (rows.reduce((sum, r) => {
+          const total = r.correct + r.incorrect + r.skipped;
+          return sum + (total ? r.correct / total : 0);
+        }, 0) /
+          rows.length) *
+          100
+      )
+    : null;
 
+  // --- Daily trend ---
+  const byDay = {};
+  rows.forEach((r) => {
+    const day = r.createdAt.slice(0, 10);
+    if (!byDay[day]) byDay[day] = { attempts: 0, devices: new Set() };
+    byDay[day].attempts += 1;
+    byDay[day].devices.add(r.deviceId);
+  });
+  const days = Object.keys(byDay).sort();
+  const maxDayAttempts = Math.max(1, ...days.map((d) => byDay[d].attempts));
+
+  // --- Per-mock breakdown ---
   const perMock = {};
   rows.forEach((r) => {
-    if (!perMock[r.mock_id]) perMock[r.mock_id] = { attempts: 0, devices: new Set() };
-    perMock[r.mock_id].attempts += 1;
-    perMock[r.mock_id].devices.add(r.device_id);
+    if (!perMock[r.mockId]) perMock[r.mockId] = { attempts: 0, devices: new Set(), scoreSum: 0, accSum: 0 };
+    const p = perMock[r.mockId];
+    p.attempts += 1;
+    p.devices.add(r.deviceId);
+    p.scoreSum += r.score;
+    const total = r.correct + r.incorrect + r.skipped;
+    p.accSum += total ? r.correct / total : 0;
   });
   const perMockRows = Object.entries(perMock)
     .map(([mockId, v]) => ({
@@ -461,12 +525,39 @@ function AnalyticsView({ mocksIndex }) {
       title: mocksIndex.find((m) => m.id === mockId)?.title || "Deleted mock",
       attempts: v.attempts,
       devices: v.devices.size,
+      avgScore: Math.round((v.scoreSum / v.attempts) * 10) / 10,
+      avgAccuracy: Math.round((v.accSum / v.attempts) * 100),
     }))
     .sort((a, b) => b.attempts - a.attempts);
 
+  // --- Audience-wide weak topics ---
+  const topicAgg = {};
+  rows.forEach((r) => {
+    (r.topicBreakdown || []).forEach((t) => {
+      if (!topicAgg[t.topic]) topicAgg[t.topic] = { correct: 0, total: 0 };
+      topicAgg[t.topic].correct += t.correct;
+      topicAgg[t.topic].total += t.total;
+    });
+  });
+  const topicRows = Object.entries(topicAgg)
+    .map(([topic, v]) => ({ topic, ...v, accuracy: v.correct / v.total }))
+    .sort((a, b) => a.accuracy - b.accuracy);
+  function topicBadge(accuracy) {
+    if (accuracy < 0.4) return { label: "Weak", cls: "bg-red-100 text-red-700" };
+    if (accuracy < 0.7) return { label: "Getting there", cls: "bg-amber-100 text-amber-700" };
+    return { label: "Strong", cls: "bg-emerald-100 text-emerald-700" };
+  }
+
+  // --- Toughest questions (min 3 answers so one fluke doesn't dominate) ---
+  const toughestQuestions = Object.entries(questionStats)
+    .map(([qId, v]) => ({ qId, ...v, accuracy: v.correct / v.attempted }))
+    .filter((q) => q.attempted >= 3)
+    .sort((a, b) => a.accuracy - b.accuracy)
+    .slice(0, 10);
+
   return (
-    <div className="max-w-4xl">
-      <div className="bg-white border border-slate-200 rounded-lg p-4 mb-6 flex flex-wrap items-end gap-3">
+    <div className="max-w-4xl space-y-6">
+      <div className="bg-white border border-slate-200 rounded-lg p-4 flex flex-wrap items-end gap-3">
         <div>
           <label className="block text-xs font-medium text-slate-500 mb-1">From</label>
           <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="text-sm border border-slate-200 rounded-md px-3 py-2" />
@@ -488,9 +579,13 @@ function AnalyticsView({ mocksIndex }) {
 
       {loading ? (
         <div className="text-sm text-slate-400">Loading...</div>
+      ) : rows.length === 0 ? (
+        <div className="bg-white border border-dashed border-slate-200 rounded-xl p-12 text-center text-sm text-slate-400">
+          No attempts in this range.
+        </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-4 mb-6">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="bg-white border border-slate-200 rounded-lg p-4">
               <div className="text-2xl font-semibold text-slate-800">{uniqueDevices}</div>
               <div className="text-xs text-slate-500 mt-0.5">Unique devices</div>
@@ -499,21 +594,48 @@ function AnalyticsView({ mocksIndex }) {
               <div className="text-2xl font-semibold text-slate-800">{rows.length}</div>
               <div className="text-xs text-slate-500 mt-0.5">Total attempts</div>
             </div>
+            <div className="bg-white border border-slate-200 rounded-lg p-4">
+              <div className="text-2xl font-semibold text-slate-800">
+                {oneTimeDevices} <span className="text-sm font-normal text-slate-400">/ {returningDevices}</span>
+              </div>
+              <div className="text-xs text-slate-500 mt-0.5">One-time / returning</div>
+            </div>
+            <div className="bg-white border border-slate-200 rounded-lg p-4">
+              <div className="text-2xl font-semibold text-slate-800">{avgAccuracy}%</div>
+              <div className="text-xs text-slate-500 mt-0.5">Average accuracy</div>
+            </div>
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-lg p-4">
+            <h2 className="text-sm font-semibold text-slate-700 mb-3">Daily activity</h2>
+            <div className="flex items-end gap-1.5 overflow-x-auto pb-1" style={{ minHeight: 130 }}>
+              {days.map((day) => {
+                const v = byDay[day];
+                const height = Math.max(4, Math.round((v.attempts / maxDayAttempts) * 100));
+                return (
+                  <div key={day} className="flex flex-col items-center shrink-0" style={{ width: 30 }} title={`${v.attempts} attempts, ${v.devices.size} devices`}>
+                    <div className="text-[9px] text-slate-400 mb-1">{v.attempts}</div>
+                    <div className="w-4 bg-blue-600 rounded-t" style={{ height: `${height}px` }} />
+                    <div className="text-[8px] text-slate-400 mt-1">{day.slice(5)}</div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
           <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
             <div className="px-4 py-3 border-b border-slate-100">
               <h2 className="text-sm font-semibold text-slate-700">Per-mock breakdown</h2>
             </div>
-            {perMockRows.length === 0 ? (
-              <div className="p-8 text-center text-sm text-slate-400">No attempts in this range.</div>
-            ) : (
+            <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 text-xs text-slate-500">
                   <tr>
                     <th className="text-left px-4 py-2">Mock</th>
                     <th className="text-right px-4 py-2">Attempts</th>
-                    <th className="text-right px-4 py-2">Unique devices</th>
+                    <th className="text-right px-4 py-2">Devices</th>
+                    <th className="text-right px-4 py-2">Avg score</th>
+                    <th className="text-right px-4 py-2">Avg accuracy</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -522,10 +644,70 @@ function AnalyticsView({ mocksIndex }) {
                       <td className="px-4 py-2 text-slate-700">{r.title}</td>
                       <td className="px-4 py-2 text-right text-slate-600">{r.attempts}</td>
                       <td className="px-4 py-2 text-right text-slate-600">{r.devices}</td>
+                      <td className="px-4 py-2 text-right text-slate-600">{r.avgScore}</td>
+                      <td className="px-4 py-2 text-right text-slate-600">{r.avgAccuracy}%</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-100">
+              <h2 className="text-sm font-semibold text-slate-700">Audience-wide weak topics</h2>
+              <p className="text-xs text-slate-400 mt-0.5">Aggregated across every attempt in this range — a good signal for what to make content about next.</p>
+            </div>
+            {topicRows.length === 0 ? (
+              <div className="p-6 text-center text-xs text-slate-400">No topic-tagged questions attempted in this range yet.</div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {topicRows.map((t) => {
+                  const badge = topicBadge(t.accuracy);
+                  return (
+                    <div key={t.topic} className="flex items-center justify-between px-4 py-2.5 text-sm">
+                      <span className="text-slate-700">{t.topic}</span>
+                      <span className="flex items-center gap-2">
+                        <span className="text-xs text-slate-400">
+                          {t.correct}/{t.total}
+                        </span>
+                        <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${badge.cls}`}>{badge.label}</span>
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-100">
+              <h2 className="text-sm font-semibold text-slate-700">Toughest questions</h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Lowest accuracy among students who answered (skipped questions aren't counted against this) — at least 3 answers, so one fluke doesn't skew it.
+              </p>
+            </div>
+            {toughestQuestions.length === 0 ? (
+              <div className="p-6 text-center text-xs text-slate-400">Not enough answered questions yet to show this.</div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {toughestQuestions.map((q) => (
+                  <div key={q.qId} className="px-4 py-2.5 text-sm flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-slate-700 truncate">
+                        <MathText text={q.text} />
+                      </div>
+                      <div className="text-xs text-slate-400 mt-0.5">
+                        {mocksIndex.find((m) => m.id === q.mockId)?.title || "Deleted mock"}
+                        {q.topic ? ` · ${q.topic}` : ""}
+                      </div>
+                    </div>
+                    <span className="shrink-0 text-xs font-medium px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+                      {q.correct}/{q.attempted} correct
+                    </span>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </>
