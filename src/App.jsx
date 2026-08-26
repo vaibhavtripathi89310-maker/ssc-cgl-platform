@@ -3,9 +3,14 @@ import {
   LayoutDashboard, ListChecks, Plus, Search, Pencil, Eye, Copy, Trash2,
   CheckCircle2, XCircle, AlertCircle, ChevronUp, ChevronDown, Upload,
   ArrowLeft, Save, X, Lock, Play, Clock, Flag, Download, LogOut,
+  TrendingUp, Target, Youtube,
 } from "lucide-react";
-import { loadMocksIndex, saveMocksIndex, loadMockQuestions, saveMockQuestions, deleteMockQuestions } from "./lib/storage";
+import {
+  loadMocksIndex, saveMocksIndex, loadMockQuestions, saveMockQuestions, deleteMockQuestions,
+  saveAttempt, loadMockScores, loadDeviceAttempts, loadQuestionsByTopics,
+} from "./lib/storage";
 import { signIn, signOut, getSession, onAuthStateChange } from "./lib/auth";
+import { getDeviceId } from "./lib/device";
 
 // ============================================================================
 // MATH RENDERING
@@ -820,6 +825,17 @@ function MockEditorView({ mock, questions, onSaveMeta, onOpenSection, onTogglePu
             <label className="block text-xs font-medium text-slate-500 mb-1">Instructions</label>
             <textarea value={form.instructions} onChange={(e) => update("instructions", e.target.value)} rows={2} className="w-full text-sm border border-slate-200 rounded-md px-3 py-2" />
           </div>
+          <div className="col-span-2">
+            <label className="block text-xs font-medium text-slate-500 mb-1">
+              "Watch me take this test" YouTube link (optional)
+            </label>
+            <input
+              value={form.videoUrl || ""}
+              onChange={(e) => update("videoUrl", e.target.value)}
+              placeholder="https://youtube.com/watch?v=..."
+              className="w-full text-sm border border-slate-200 rounded-md px-3 py-2"
+            />
+          </div>
         </div>
 
         {orphanedCounts.length > 0 && (
@@ -1551,7 +1567,10 @@ function RunMockView({ mock, questions, onExit }) {
     "unvisited": "bg-white text-slate-500 border-slate-300",
   };
 
-  if (finished) {
+  // Score + topic-wise breakdown, shared by the results screen render and the
+  // attempt-history save below — computed from answers/questions/sections,
+  // which are always in scope regardless of `finished`.
+  function computeResults() {
     let correct = 0, incorrect = 0, skipped = 0;
     const sectionBreakdown = sections.map((s) => {
       let sCorrect = 0, sIncorrect = 0, sSkipped = 0;
@@ -1585,6 +1604,44 @@ function RunMockView({ mock, questions, onExit }) {
       .sort((a, b) => a.accuracy - b.accuracy);
     const weakTopics = topicRows.filter((t) => t.accuracy < 0.4).map((t) => t.topic);
     const strongTopics = topicRows.filter((t) => t.accuracy >= 0.7).map((t) => t.topic);
+
+    return { correct, incorrect, skipped, sectionBreakdown, score, topicRows, weakTopics, strongTopics };
+  }
+
+  // Save this attempt to anonymous per-device history once the test is
+  // finished, then work out where it ranks against everyone else who's
+  // attempted this same mock. Best-effort: if Supabase is briefly
+  // unreachable, the results screen still works, just without a percentile.
+  const [percentile, setPercentile] = useState(null);
+  useEffect(() => {
+    if (!finished) return;
+    const { score, correct, incorrect, skipped, topicRows } = computeResults();
+    const totalTime = Object.values(timeSpent).reduce((sum, s) => sum + s, 0);
+    (async () => {
+      try {
+        await saveAttempt({
+          id: generateId("attempt"),
+          deviceId: getDeviceId(),
+          mockId: mock.id,
+          score,
+          correct,
+          incorrect,
+          skipped,
+          totalTime,
+          topicBreakdown: topicRows,
+        });
+        const scores = await loadMockScores(mock.id);
+        const better = scores.filter((s) => s < score).length;
+        setPercentile(scores.length > 1 ? Math.round((better / scores.length) * 100) : null);
+      } catch {
+        // Non-critical — the results screen works fine without this.
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [finished]);
+
+  if (finished) {
+    const { correct, incorrect, skipped, sectionBreakdown, score, topicRows, weakTopics, strongTopics } = computeResults();
     function topicBadge(accuracy) {
       if (accuracy < 0.4) return { label: "Needs revision", cls: "bg-red-100 text-red-700" };
       if (accuracy < 0.7) return { label: "Getting there", cls: "bg-amber-100 text-amber-700" };
@@ -1617,7 +1674,12 @@ function RunMockView({ mock, questions, onExit }) {
             <div><div className="text-2xl font-semibold text-red-500">{incorrect}</div><div className="text-xs text-slate-400">Incorrect</div></div>
             <div><div className="text-2xl font-semibold text-slate-400">{skipped}</div><div className="text-xs text-slate-400">Skipped</div></div>
           </div>
-          <div className="text-3xl font-bold text-slate-800 mb-6">{score} <span className="text-lg font-normal text-slate-400">/ {mock.totalMarks}</span></div>
+          <div className="text-3xl font-bold text-slate-800 mb-2">{score} <span className="text-lg font-normal text-slate-400">/ {mock.totalMarks}</span></div>
+          {percentile !== null && (
+            <div className="inline-block bg-blue-50 text-blue-700 text-xs font-medium px-3 py-1 rounded-full mb-4">
+              Better than {percentile}% of students who've attempted this mock
+            </div>
+          )}
 
           {sectionBreakdown.length > 1 && (
             <div className="text-left mb-6 space-y-1.5">
@@ -1747,7 +1809,23 @@ function RunMockView({ mock, questions, onExit }) {
           )}
         </div>
 
-        <div className="max-w-2xl w-full mt-6">
+        <div className="max-w-2xl w-full mt-6 space-y-3">
+          {mock.videoUrl && (
+            <a
+              href={mock.videoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 bg-white border border-slate-200 rounded-2xl p-5 hover:border-red-300 transition-colors"
+            >
+              <span className="shrink-0 w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center">
+                <Youtube size={20} />
+              </span>
+              <span className="text-left">
+                <span className="block text-sm font-semibold text-slate-800">Watch me take this exact test</span>
+                <span className="block text-xs text-slate-500">See the strategy and thinking behind every question →</span>
+              </span>
+            </a>
+          )}
           <a
             href={YOUTUBE_CHANNEL_URL}
             target="_blank"
@@ -2059,6 +2137,7 @@ function AdminPanel() {
       mockType: MOCK_TYPES.FULL,
       sectionalKey: null,
       sectionalQuestionCount: REQUIRED_PER_SECTION,
+      videoUrl: null,
       createdAt: nowISO(),
       updatedAt: nowISO(),
     };
@@ -2499,6 +2578,215 @@ function TypeSelectCard({ type, count, onSelect }) {
   );
 }
 
+// ============================================================================
+// MY PROGRESS — this device's attempt history (see src/lib/device.js: no
+// login, just a random id kept in localStorage) plus weak topics aggregated
+// across every attempt, with a one-click way to drill into them.
+// ============================================================================
+function ProgressView({ attempts, mocksIndex, onBack, onPractice }) {
+  const topicAgg = {};
+  attempts.forEach((a) => {
+    (a.topicBreakdown || []).forEach((t) => {
+      if (!topicAgg[t.topic]) topicAgg[t.topic] = { correct: 0, total: 0 };
+      topicAgg[t.topic].correct += t.correct;
+      topicAgg[t.topic].total += t.total;
+    });
+  });
+  const weakTopics = Object.entries(topicAgg)
+    .map(([topic, v]) => ({ topic, ...v, accuracy: v.correct / v.total }))
+    .filter((t) => t.accuracy < 0.4)
+    .sort((a, b) => a.accuracy - b.accuracy)
+    .map((t) => t.topic);
+
+  return (
+    <div className="min-h-screen bg-slate-50">
+      <header className="bg-white border-b border-slate-200 px-6 py-4">
+        <button onClick={onBack} className="text-sm text-slate-500 mb-2">← Back</button>
+        <h1 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+          <TrendingUp size={16} className="text-blue-700" /> My Progress
+        </h1>
+        <p className="text-xs text-slate-400">{attempts.length} test{attempts.length === 1 ? "" : "s"} attempted on this device</p>
+      </header>
+
+      <main className="p-6 max-w-3xl mx-auto">
+        {attempts.length === 0 ? (
+          <div className="bg-white border border-dashed border-slate-200 rounded-xl p-12 text-center text-sm text-slate-400">
+            You haven't attempted any tests on this device yet — take a mock to start tracking your progress.
+          </div>
+        ) : (
+          <>
+            {weakTopics.length > 0 && (
+              <div className="bg-white border border-slate-200 rounded-xl p-5 mb-4">
+                <h2 className="text-sm font-semibold text-slate-700 mb-1">Your weak topics</h2>
+                <p className="text-xs text-slate-400 mb-3">Aggregated across every test you've attempted on this device.</p>
+                <div className="flex flex-wrap gap-1.5 mb-4">
+                  {weakTopics.map((t) => (
+                    <span key={t} className="text-xs bg-red-50 text-red-700 border border-red-200 px-2.5 py-1 rounded-full">
+                      {t}
+                    </span>
+                  ))}
+                </div>
+                <button
+                  onClick={() => onPractice(weakTopics)}
+                  className="flex items-center gap-1.5 text-sm bg-blue-900 text-white px-4 py-2 rounded-lg"
+                >
+                  <Target size={14} /> Practice these topics
+                </button>
+              </div>
+            )}
+
+            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+              <div className="px-5 py-3 border-b border-slate-100">
+                <h2 className="text-sm font-semibold text-slate-700">Attempt history</h2>
+              </div>
+              <div className="divide-y divide-slate-100">
+                {[...attempts].reverse().map((a) => {
+                  const m = mocksIndex.find((mm) => mm.id === a.mockId);
+                  return (
+                    <div key={a.id} className="px-5 py-3 flex items-center justify-between">
+                      <div>
+                        <div className="text-sm text-slate-700">{m ? m.title || "Untitled mock" : "Deleted mock"}</div>
+                        <div className="text-xs text-slate-400">
+                          {new Date(a.createdAt).toLocaleDateString()} · {a.correct} correct, {a.incorrect} incorrect, {a.skipped} skipped
+                        </div>
+                      </div>
+                      <div className="text-sm font-semibold text-slate-800">{a.score}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </>
+        )}
+      </main>
+    </div>
+  );
+}
+
+// ============================================================================
+// PRACTICE WEAK TOPICS — a lightweight, untimed drill through real questions
+// tagged with the student's weak topics (pulled across all published mocks).
+// Deliberately not RunMockView: immediate feedback per question suits
+// revision practice better than a timed exam simulation.
+// ============================================================================
+function WeakTopicPracticeView({ topics, onExit }) {
+  const [loading, setLoading] = useState(true);
+  const [list, setList] = useState([]);
+  const [idx, setIdx] = useState(0);
+  const [selected, setSelected] = useState(null);
+  const [correctCount, setCorrectCount] = useState(0);
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const qs = await loadQuestionsByTopics(topics, 20);
+      setList(qs);
+      setLoading(false);
+    })();
+  }, [topics]);
+
+  function choose(i) {
+    if (selected !== null) return;
+    setSelected(i);
+    if (i === list[idx].answer) setCorrectCount((c) => c + 1);
+  }
+  function next() {
+    if (idx < list.length - 1) {
+      setIdx((x) => x + 1);
+      setSelected(null);
+    } else {
+      setDone(true);
+    }
+  }
+
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center text-sm text-slate-400">Loading practice questions...</div>;
+  }
+  if (list.length === 0) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <div className="text-center bg-white border border-dashed border-slate-300 rounded-xl p-10 text-sm text-slate-400">
+          No tagged questions found for your weak topics yet — check back once more are added.
+          <div className="mt-4">
+            <button onClick={onExit} className="text-sm px-4 py-2 rounded-md border border-slate-200 text-slate-600">
+              Back
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  if (done) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex flex-col items-center py-10 px-4">
+        <div className="max-w-md w-full text-center bg-white border border-slate-200 rounded-2xl shadow-sm p-10">
+          <Target className="mx-auto mb-4 text-blue-700" size={40} />
+          <h2 className="text-xl font-semibold text-slate-800 mb-1">Practice complete</h2>
+          <p className="text-sm text-slate-500 mb-6">{correctCount} / {list.length} correct</p>
+          <button onClick={onExit} className="text-sm px-5 py-2.5 rounded-lg bg-slate-900 text-white">
+            Back to progress
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const q = list[idx];
+  return (
+    <div className="min-h-screen bg-slate-100 flex flex-col items-center py-10 px-4">
+      <div className="max-w-2xl w-full">
+        <div className="flex items-center justify-between mb-3">
+          <button onClick={onExit} className="text-sm text-slate-500">← Exit practice</button>
+          <span className="text-xs text-slate-400">
+            Question {idx + 1} of {list.length}{q.topic ? ` · ${q.topic}` : ""}
+          </span>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-8">
+          <p className="text-lg leading-relaxed text-slate-900 mb-6 font-medium">
+            <MathText text={q.text} />
+          </p>
+          <div className="space-y-3">
+            {q.options.map((opt, i) => {
+              const isRight = i === q.answer;
+              const isPicked = i === selected;
+              let cls = "border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50";
+              if (selected !== null) {
+                if (isRight) cls = "border-emerald-400 bg-emerald-50 text-emerald-800";
+                else if (isPicked) cls = "border-red-300 bg-red-50 text-red-700";
+              }
+              return (
+                <button
+                  key={i}
+                  onClick={() => choose(i)}
+                  disabled={selected !== null}
+                  className={`w-full flex items-center gap-3 text-left px-5 py-3.5 rounded-xl border-2 text-base transition-colors ${cls}`}
+                >
+                  <span className="w-7 h-7 shrink-0 rounded-full flex items-center justify-center text-sm font-semibold bg-slate-100 text-slate-500">
+                    {LETTERS[i]}
+                  </span>
+                  <MathText text={opt} />
+                </button>
+              );
+            })}
+          </div>
+          {selected !== null && q.explanation && (
+            <p className="text-xs text-slate-500 mt-4 italic">
+              <MathText text={q.explanation} />
+            </p>
+          )}
+        </div>
+        {selected !== null && (
+          <div className="flex justify-end mt-4">
+            <button onClick={next} className="text-sm px-5 py-2.5 rounded-lg bg-blue-900 text-white font-medium">
+              {idx < list.length - 1 ? "Next question" : "Finish practice"}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function StudentApp() {
   const [mocksIndex, setMocksIndex] = useState([]);
   const [loaded, setLoaded] = useState(false);
@@ -2506,6 +2794,8 @@ function StudentApp() {
   const [typeFilter, setTypeFilter] = useState(null); // MOCK_TYPES.FULL | MOCK_TYPES.SECTIONAL
   const [selectedMock, setSelectedMock] = useState(null);
   const [selectedQuestions, setSelectedQuestions] = useState(null);
+  const [attempts, setAttempts] = useState([]);
+  const [practiceTopics, setPracticeTopics] = useState(null);
 
   // Same storage source as AdminPanel — no separate student store. Reloading
   // on every visit to a list screen (not just once on mount) means an admin
@@ -2570,6 +2860,16 @@ function StudentApp() {
     setView("run");
   }
 
+  async function openProgress() {
+    setAttempts(await loadDeviceAttempts(getDeviceId()));
+    setView("progress");
+  }
+
+  function startPractice(topics) {
+    setPracticeTopics(topics);
+    setView("practice");
+  }
+
   if (!loaded) {
     return <div className="min-h-screen flex items-center justify-center text-sm text-slate-400">Loading available tests...</div>;
   }
@@ -2578,6 +2878,14 @@ function StudentApp() {
     // The exact same RunMockView the Admin Panel's "Run Mock" button uses —
     // no second engine, no reimplementation of timer/scoring/palette logic.
     return <RunMockView mock={selectedMock} questions={selectedQuestions} onExit={backToList} />;
+  }
+
+  if (view === "progress") {
+    return <ProgressView attempts={attempts} mocksIndex={mocksIndex} onBack={backToType} onPractice={startPractice} />;
+  }
+
+  if (view === "practice" && practiceTopics) {
+    return <WeakTopicPracticeView topics={practiceTopics} onExit={() => setView("progress")} />;
   }
 
   if (view === "instructions" && selectedMock && selectedQuestions) {
@@ -2593,9 +2901,14 @@ function StudentApp() {
   if (view === "type") {
     return (
       <div className="min-h-screen bg-slate-50">
-        <header className="bg-white border-b border-slate-200 px-6 py-4">
-          <h1 className="text-base font-semibold text-slate-800">SSC CGL Mock Tests</h1>
-          <p className="text-xs text-slate-400">{publishedMocks.length} test{publishedMocks.length === 1 ? "" : "s"} available</p>
+        <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
+          <div>
+            <h1 className="text-base font-semibold text-slate-800">SSC CGL Mock Tests</h1>
+            <p className="text-xs text-slate-400">{publishedMocks.length} test{publishedMocks.length === 1 ? "" : "s"} available</p>
+          </div>
+          <button onClick={openProgress} className="flex items-center gap-1.5 text-xs font-medium text-blue-700 border border-blue-200 bg-blue-50 px-3 py-1.5 rounded-full">
+            <TrendingUp size={13} /> My Progress
+          </button>
         </header>
         <main className="p-6 max-w-3xl mx-auto">
           <p className="text-sm text-slate-500 mb-5">What would you like to practice?</p>

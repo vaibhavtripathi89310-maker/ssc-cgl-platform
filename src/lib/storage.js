@@ -27,6 +27,7 @@ function mockToRow(m) {
     mock_type: m.mockType,
     sectional_key: m.sectionalKey ?? null,
     sectional_question_count: m.sectionalQuestionCount ?? null,
+    video_url: m.videoUrl ?? null,
     created_at: m.createdAt,
     updated_at: m.updatedAt,
   };
@@ -46,6 +47,7 @@ function rowToMock(r) {
     mockType: r.mock_type,
     sectionalKey: r.sectional_key,
     sectionalQuestionCount: r.sectional_question_count,
+    videoUrl: r.video_url ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -143,4 +145,73 @@ export async function saveMockQuestions(mockId, data) {
 export async function deleteMockQuestions(mockId) {
   const { error } = await supabase.from("questions").delete().eq("mock_id", mockId);
   if (error) throw error;
+}
+
+// ============================================================================
+// ATTEMPT HISTORY — anonymous, per-device (see src/lib/device.js). Powers
+// rank/percentile, "your progress over time", and cross-mock weak-topic
+// aggregation. No personal info involved: device_id is just a random id
+// generated in the browser, never tied to a name/phone/email.
+// ============================================================================
+export async function saveAttempt(attempt) {
+  const { error } = await supabase.from("attempts").insert({
+    id: attempt.id,
+    device_id: attempt.deviceId,
+    mock_id: attempt.mockId,
+    score: attempt.score,
+    correct: attempt.correct,
+    incorrect: attempt.incorrect,
+    skipped: attempt.skipped,
+    total_time: attempt.totalTime,
+    topic_breakdown: attempt.topicBreakdown,
+  });
+  if (error) throw error;
+}
+
+// All scores ever recorded for a mock, for computing "you scored better than
+// X% of students" — RLS only exposes attempts for mocks that are published,
+// same as questions.
+export async function loadMockScores(mockId) {
+  const { data, error } = await supabase.from("attempts").select("score").eq("mock_id", mockId);
+  if (error) throw error;
+  return (data || []).map((r) => r.score);
+}
+
+export async function loadDeviceAttempts(deviceId) {
+  const { data, error } = await supabase
+    .from("attempts")
+    .select("*")
+    .eq("device_id", deviceId)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return (data || []).map((r) => ({
+    id: r.id,
+    mockId: r.mock_id,
+    score: r.score,
+    correct: r.correct,
+    incorrect: r.incorrect,
+    skipped: r.skipped,
+    totalTime: r.total_time,
+    topicBreakdown: r.topic_breakdown || [],
+    createdAt: r.created_at,
+  }));
+}
+
+// Pulls real questions tagged with any of the given topics, for the
+// "practice your weak topics" mode — RLS already restricts this to
+// questions belonging to published mocks, same guarantee as everywhere else
+// a student reads questions.
+export async function loadQuestionsByTopics(topics, limit = 20) {
+  if (!topics || topics.length === 0) return [];
+  const { data, error } = await supabase.from("questions").select("*").in("topic", topics).limit(limit);
+  if (error) throw error;
+  return (data || []).map((r) => ({
+    id: r.id,
+    text: r.text,
+    options: r.options,
+    answer: r.answer,
+    explanation: r.explanation,
+    difficulty: r.difficulty,
+    topic: r.topic ?? null,
+  }));
 }
