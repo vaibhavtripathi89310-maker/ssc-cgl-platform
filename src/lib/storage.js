@@ -168,13 +168,18 @@ export async function saveAttempt(attempt) {
   if (error) throw error;
 }
 
-// All scores ever recorded for a mock, for computing "you scored better than
-// X% of students" — RLS only exposes attempts for mocks that are published,
-// same as questions.
+// Every attempt's id+score for a mock, sorted best-first — powers both
+// percentile ("better than X% of students") and the top-scores leaderboard
+// from one query. RLS only exposes attempts for published mocks, same as
+// questions.
 export async function loadMockScores(mockId) {
-  const { data, error } = await supabase.from("attempts").select("score").eq("mock_id", mockId);
+  const { data, error } = await supabase
+    .from("attempts")
+    .select("id, score")
+    .eq("mock_id", mockId)
+    .order("score", { ascending: false });
   if (error) throw error;
-  return (data || []).map((r) => r.score);
+  return data || [];
 }
 
 export async function loadDeviceAttempts(deviceId) {
@@ -214,4 +219,25 @@ export async function loadQuestionsByTopics(topics, limit = 20) {
     difficulty: r.difficulty,
     topic: r.topic ?? null,
   }));
+}
+
+// ============================================================================
+// CUTOFFS — admin-entered historical SSC CGL cutoff scores, shown against a
+// student's Full Mock score. Simple CRUD (a handful of rows at most), unlike
+// mocks/questions there's no "whole list" reconciliation here.
+// ============================================================================
+export async function loadCutoffs() {
+  const { data, error } = await supabase.from("cutoffs").select("*").order("year", { ascending: false });
+  if (error) throw error;
+  return (data || []).map((r) => ({ id: r.id, year: r.year, cutoff: r.cutoff }));
+}
+
+export async function addCutoff(cutoff) {
+  const { error } = await supabase.from("cutoffs").insert({ id: cutoff.id, year: cutoff.year, cutoff: cutoff.cutoff });
+  if (error) throw error;
+}
+
+export async function deleteCutoff(id) {
+  const { error } = await supabase.from("cutoffs").delete().eq("id", id);
+  if (error) throw error;
 }

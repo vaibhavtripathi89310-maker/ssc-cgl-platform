@@ -3,11 +3,12 @@ import {
   LayoutDashboard, ListChecks, Plus, Search, Pencil, Eye, Copy, Trash2,
   CheckCircle2, XCircle, AlertCircle, ChevronUp, ChevronDown, Upload,
   ArrowLeft, Save, X, Lock, Play, Clock, Flag, Download, LogOut,
-  TrendingUp, Target, Youtube,
+  TrendingUp, Target, Youtube, Trophy, Flame, Share2, BarChart2,
 } from "lucide-react";
 import {
   loadMocksIndex, saveMocksIndex, loadMockQuestions, saveMockQuestions, deleteMockQuestions,
   saveAttempt, loadMockScores, loadDeviceAttempts, loadQuestionsByTopics,
+  loadCutoffs, addCutoff, deleteCutoff,
 } from "./lib/storage";
 import { signIn, signOut, getSession, onAuthStateChange } from "./lib/auth";
 import { getDeviceId } from "./lib/device";
@@ -402,6 +403,108 @@ function ConfirmModal({ title, body, confirmLabel, danger, onConfirm, onCancel }
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// CUTOFFS — admin-managed historical SSC CGL cutoff scores, shown to
+// students on Full Mock results. Deliberately absent from the student side
+// until at least one row exists here.
+// ============================================================================
+function CutoffsView() {
+  const [cutoffs, setCutoffs] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [year, setYear] = useState(new Date().getFullYear());
+  const [cutoff, setCutoff] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState(null);
+
+  const refresh = useCallback(async () => {
+    setCutoffs(await loadCutoffs());
+    setLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  async function handleAdd() {
+    const y = Number(year);
+    const c = Number(cutoff);
+    if (!y || !c) return;
+    await addCutoff({ id: generateId("cutoff"), year: y, cutoff: c });
+    setCutoff("");
+    refresh();
+  }
+
+  async function handleDelete() {
+    await deleteCutoff(deleteTarget.id);
+    setDeleteTarget(null);
+    refresh();
+  }
+
+  if (!loaded) {
+    return <div className="text-sm text-slate-400">Loading...</div>;
+  }
+
+  return (
+    <div className="max-w-xl">
+      <div className="bg-white border border-slate-200 rounded-lg p-6 mb-6">
+        <h2 className="text-sm font-semibold text-slate-700 mb-1">Add a cutoff</h2>
+        <p className="text-xs text-slate-500 mb-4">
+          Shown to students on Full Mock results, comparing their score against real past SSC CGL cutoffs. This
+          comparison only appears on the student side once you've added at least one year here.
+        </p>
+        <div className="flex gap-2">
+          <input
+            type="number"
+            value={year}
+            onChange={(e) => setYear(e.target.value)}
+            placeholder="Year"
+            className="w-28 text-sm border border-slate-200 rounded-md px-3 py-2"
+          />
+          <input
+            type="number"
+            value={cutoff}
+            onChange={(e) => setCutoff(e.target.value)}
+            placeholder="Cutoff score (out of 200)"
+            className="flex-1 text-sm border border-slate-200 rounded-md px-3 py-2"
+          />
+          <button onClick={handleAdd} className="text-sm px-4 py-2 rounded-md bg-blue-900 text-white">
+            Add
+          </button>
+        </div>
+      </div>
+
+      {cutoffs.length === 0 ? (
+        <div className="bg-white border border-dashed border-slate-200 rounded-lg p-10 text-center text-sm text-slate-400">
+          No cutoffs added yet — students won't see this comparison until you add one.
+        </div>
+      ) : (
+        <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+          {cutoffs.map((c) => (
+            <div key={c.id} className="flex items-center justify-between px-4 py-3 border-b border-slate-100 last:border-0">
+              <div className="text-sm text-slate-700">
+                {c.year} <span className="text-slate-400">— cutoff {c.cutoff}</span>
+              </div>
+              <button onClick={() => setDeleteTarget(c)} className="text-slate-300 hover:text-red-600">
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {deleteTarget && (
+        <ConfirmModal
+          title="Delete this cutoff?"
+          body={`Remove the ${deleteTarget.year} cutoff (${deleteTarget.cutoff})? Students won't see it anymore.`}
+          confirmLabel="Delete"
+          danger
+          onConfirm={handleDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 }
@@ -1449,6 +1552,110 @@ function PreviewView({ mock, questions }) {
 }
 
 // ============================================================================
+// SHARE RESULT CARD — draws a story/status-shaped (1080x1920) image with the
+// student's score, so it drops straight into a WhatsApp Status or Instagram
+// Story without cropping. Uses the Canvas API directly (no image library) —
+// on mobile browsers, sharing hands the actual image file to the OS share
+// sheet so the student can pick WhatsApp/Instagram/anything directly;
+// otherwise it just downloads, and the card is visible on screen either way
+// so a plain screenshot always works as a fallback.
+// ============================================================================
+function ShareResultCard({ mock, score, totalMarks }) {
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const W = canvas.width, H = canvas.height;
+
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, "#1e3a8a");
+    grad.addColorStop(1, "#1d4ed8");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#ffffff";
+
+    ctx.font = "600 52px system-ui, sans-serif";
+    ctx.fillText("I SCORED", W / 2, H * 0.36);
+
+    ctx.font = "800 150px system-ui, sans-serif";
+    ctx.fillText(`${score}/${totalMarks}`, W / 2, H * 0.47);
+
+    ctx.font = "600 44px system-ui, sans-serif";
+    wrapCanvasText(ctx, "IN THE SSC CGL MOCK TEST BY THE 100 PERCENTILER", W / 2, H * 0.57, W * 0.82, 56);
+
+    ctx.font = "600 34px system-ui, sans-serif";
+    ctx.fillStyle = "#bfdbfe";
+    ctx.fillText("TRY IT YOURSELF →", W / 2, H * 0.7);
+
+    ctx.font = "400 26px system-ui, sans-serif";
+    ctx.fillStyle = "#93c5fd";
+    wrapCanvasText(ctx, mock.title || "SSC CGL Mock Test", W / 2, H * 0.88, W * 0.82, 34);
+    ctx.fillText("@the100percentiler", W / 2, H * 0.95);
+  }, [score, totalMarks, mock.title]);
+
+  function shareOrDownload() {
+    const canvas = canvasRef.current;
+    canvas.toBlob(async (blob) => {
+      if (!blob) return;
+      const file = new File([blob], "my-ssc-cgl-score.png", { type: "image/png" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: "SSC CGL Mock Test" });
+          return;
+        } catch {
+          // user cancelled the share sheet — fall through to download
+        }
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "my-ssc-cgl-score.png";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }, "image/png");
+  }
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-2xl p-5">
+      <h3 className="text-sm font-semibold text-slate-700 mb-3">Share your score</h3>
+      <canvas ref={canvasRef} width={1080} height={1920} className="w-full max-w-[220px] mx-auto rounded-xl shadow-md block" />
+      <button
+        onClick={shareOrDownload}
+        className="w-full mt-4 flex items-center justify-center gap-2 bg-blue-900 text-white text-sm font-medium py-2.5 rounded-lg"
+      >
+        <Share2 size={15} /> Share / Download
+      </button>
+      <p className="text-[11px] text-slate-400 text-center mt-2">
+        Post it as a WhatsApp Status, Instagram Story, anywhere — or just screenshot it.
+      </p>
+    </div>
+  );
+}
+
+function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight) {
+  const words = text.split(" ");
+  let line = "";
+  let curY = y;
+  for (const word of words) {
+    const test = `${line}${word} `;
+    if (ctx.measureText(test).width > maxWidth && line) {
+      ctx.fillText(line.trim(), x, curY);
+      line = `${word} `;
+      curY += lineHeight;
+    } else {
+      line = test;
+    }
+  }
+  ctx.fillText(line.trim(), x, curY);
+}
+
+// ============================================================================
 // RUN MOCK — an actual timed, section-locked attempt, using this mock's real
 // questions. Distinct from PreviewView: no answers shown, real countdown per
 // section, auto-advances when time is up, gives a score at the end.
@@ -1639,14 +1846,19 @@ function RunMockView({ mock, questions, onExit }) {
   // attempted this same mock. Best-effort: if Supabase is briefly
   // unreachable, the results screen still works, just without a percentile.
   const [percentile, setPercentile] = useState(null);
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [myAttemptId, setMyAttemptId] = useState(null);
+  const [cutoffs, setCutoffs] = useState([]);
   useEffect(() => {
     if (!finished) return;
     const { score, correct, incorrect, skipped, topicRows } = computeResults();
     const totalTime = Object.values(timeSpent).reduce((sum, s) => sum + s, 0);
+    const attemptId = generateId("attempt");
+    setMyAttemptId(attemptId);
     (async () => {
       try {
         await saveAttempt({
-          id: generateId("attempt"),
+          id: attemptId,
           deviceId: getDeviceId(),
           mockId: mock.id,
           score,
@@ -1656,13 +1868,22 @@ function RunMockView({ mock, questions, onExit }) {
           totalTime,
           topicBreakdown: topicRows,
         });
-        const scores = await loadMockScores(mock.id);
-        const better = scores.filter((s) => s < score).length;
-        setPercentile(scores.length > 1 ? Math.round((better / scores.length) * 100) : null);
+        const rows = await loadMockScores(mock.id); // [{id, score}], best first
+        const better = rows.filter((r) => r.score < score).length;
+        setPercentile(rows.length > 1 ? Math.round((better / rows.length) * 100) : null);
+        setLeaderboard(rows.slice(0, 5));
       } catch {
         // Non-critical — the results screen works fine without this.
       }
     })();
+    // Cutoff comparison only makes sense on the same 200-mark scale as the
+    // real exam, so only Full Mocks show it — and only once you've entered
+    // at least one year in admin.
+    if (getMockType(mock) === MOCK_TYPES.FULL) {
+      loadCutoffs()
+        .then(setCutoffs)
+        .catch(() => {});
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finished]);
 
@@ -1723,6 +1944,62 @@ function RunMockView({ mock, questions, onExit }) {
             Back to admin panel
           </button>
         </div>
+
+        <div className="max-w-md w-full mt-6">
+          <ShareResultCard mock={mock} score={score} totalMarks={mock.totalMarks} />
+        </div>
+
+        {leaderboard.length > 0 && (
+          <div className="max-w-md w-full mt-6 bg-white border border-slate-200 rounded-2xl p-5 text-left">
+            <h3 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-1.5">
+              <Trophy size={15} className="text-amber-500" /> Top scores for this mock
+            </h3>
+            <div className="space-y-1.5">
+              {leaderboard.map((row, i) => (
+                <div
+                  key={row.id}
+                  className={`flex items-center justify-between text-xs rounded-md px-3 py-2 ${
+                    row.id === myAttemptId ? "bg-blue-50 border border-blue-200" : "bg-slate-50"
+                  }`}
+                >
+                  <span className={row.id === myAttemptId ? "font-semibold text-blue-800" : "text-slate-600"}>
+                    #{i + 1}{row.id === myAttemptId ? " · You" : ""}
+                  </span>
+                  <span className="font-medium text-slate-800">{row.score}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {cutoffs.length > 0 && (
+          <div className="max-w-md w-full mt-6 bg-white border border-slate-200 rounded-2xl p-5 text-left">
+            <h3 className="text-sm font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
+              <BarChart2 size={15} className="text-blue-700" /> Your score vs. past cutoffs
+            </h3>
+            <p className="text-xs text-slate-400 mb-3">How {score} compares to recent years' actual SSC CGL cutoffs.</p>
+            <div className="space-y-1.5">
+              {cutoffs.slice(0, 5).map((c) => {
+                const cleared = score >= c.cutoff;
+                return (
+                  <div key={c.id} className="flex items-center justify-between text-xs bg-slate-50 rounded-md px-3 py-2">
+                    <div>
+                      <div className="text-slate-700 font-medium">{c.year}</div>
+                      <div className="text-slate-400">Cutoff: {c.cutoff}</div>
+                    </div>
+                    <span
+                      className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
+                        cleared ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"
+                      }`}
+                    >
+                      {cleared ? "Would clear" : "Below cutoff"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="max-w-2xl w-full mt-6 space-y-3">
           <div className="bg-white border border-slate-200 rounded-xl p-5 text-left">
@@ -2340,6 +2617,7 @@ function AdminPanel() {
   const NAV = [
     { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, onClick: goDashboard },
     { key: "list", label: "Mock Tests", icon: ListChecks, onClick: goList },
+    { key: "cutoffs", label: "Cutoffs", icon: BarChart2, onClick: () => setView("cutoffs") },
     { key: "import", label: "Import Data", icon: Upload, onClick: () => setView("import") },
   ];
 
@@ -2389,6 +2667,7 @@ function AdminPanel() {
           <h1 className="text-sm font-semibold text-slate-800">
             {view === "dashboard" && "Dashboard"}
             {view === "list" && "Mock Tests"}
+            {view === "cutoffs" && "Cutoffs"}
             {view === "import" && "Import Data"}
             {view === "editor" && activeMock?.title}
             {view === "section" && `${activeMock?.title} — ${sectionLabel(activeSection)}`}
@@ -2413,6 +2692,7 @@ function AdminPanel() {
               onDeleteRequest={requestDelete}
             />
           )}
+          {view === "cutoffs" && <CutoffsView />}
           {view === "import" && <ImportDataView onImport={importData} />}
           {view === "editor" && activeMock && activeQuestions && (
             <MockEditorView
@@ -2609,7 +2889,24 @@ function TypeSelectCard({ type, count, onSelect }) {
 // login, just a random id kept in localStorage) plus weak topics aggregated
 // across every attempt, with a one-click way to drill into them.
 // ============================================================================
+// Consecutive days (including a one-day grace if today has no attempt yet)
+// with at least one attempt on this device — 0 if the streak is broken, in
+// which case the caller just doesn't show a badge rather than a "0" one.
+function computeStreak(attempts) {
+  const days = new Set(attempts.map((a) => new Date(a.createdAt).toDateString()));
+  const oneDay = 24 * 60 * 60 * 1000;
+  let cursor = new Date();
+  if (!days.has(cursor.toDateString())) cursor = new Date(cursor.getTime() - oneDay);
+  let streak = 0;
+  while (days.has(cursor.toDateString())) {
+    streak++;
+    cursor = new Date(cursor.getTime() - oneDay);
+  }
+  return streak;
+}
+
 function ProgressView({ attempts, mocksIndex, onBack, onPractice }) {
+  const streak = computeStreak(attempts);
   const topicAgg = {};
   attempts.forEach((a) => {
     (a.topicBreakdown || []).forEach((t) => {
@@ -2626,12 +2923,19 @@ function ProgressView({ attempts, mocksIndex, onBack, onPractice }) {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="bg-white border-b border-slate-200 px-6 py-4">
-        <button onClick={onBack} className="text-sm text-slate-500 mb-2">← Back</button>
-        <h1 className="text-base font-semibold text-slate-800 flex items-center gap-2">
-          <TrendingUp size={16} className="text-blue-700" /> My Progress
-        </h1>
-        <p className="text-xs text-slate-400">{attempts.length} test{attempts.length === 1 ? "" : "s"} attempted on this device</p>
+      <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-start justify-between">
+        <div>
+          <button onClick={onBack} className="text-sm text-slate-500 mb-2">← Back</button>
+          <h1 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+            <TrendingUp size={16} className="text-blue-700" /> My Progress
+          </h1>
+          <p className="text-xs text-slate-400">{attempts.length} test{attempts.length === 1 ? "" : "s"} attempted on this device</p>
+        </div>
+        {streak > 0 && (
+          <div className="flex items-center gap-1.5 bg-orange-50 text-orange-700 border border-orange-200 px-3 py-1.5 rounded-full text-xs font-semibold">
+            <Flame size={14} /> {streak}-day streak
+          </div>
+        )}
       </header>
 
       <main className="p-6 max-w-3xl mx-auto">
