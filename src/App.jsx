@@ -1279,7 +1279,12 @@ function SectionManager({ mockId, mock, sectionKey, questions, onQuestionsChange
                       <input type="checkbox" checked={selected.has(q.id)} onChange={() => toggleSelect(q.id)} />
                     </td>
                     <td className="px-3 py-2 text-slate-400 text-xs">{i + 1}</td>
-                    <td className="px-3 py-2 text-slate-700"><MathText text={q.text} /></td>
+                    <td className="px-3 py-2 text-slate-700">
+                      <MathText text={q.text} />
+                      <div className="text-[10px] font-mono text-slate-300 mt-1" title="Re-upload this id via Add / Update Questions to fix this question">
+                        id: {q.id}
+                      </div>
+                    </td>
                     <td className="px-3 py-2 font-medium text-emerald-600">{LETTERS[q.answer]}</td>
                     <td className="px-3 py-2">
                       <span className={`text-[11px] px-2 py-0.5 rounded-full ${DIFFICULTY_COLORS[q.difficulty]}`}>{q.difficulty}</span>
