@@ -270,7 +270,7 @@ function normalizeSectionLabel(input) {
 // ============================================================================
 // VALIDATION — all-or-nothing: any invalid row blocks the entire import
 // ============================================================================
-function validateImportJSON(rawText, sectionKey, existingIdsInMock, currentCount, maxAllowed) {
+function validateImportJSON(rawText, sectionKey, idsInThisSection, idsInOtherSections, currentCount, maxAllowed) {
   let parsed;
   try {
     parsed = JSON.parse(rawText);
@@ -286,8 +286,13 @@ function validateImportJSON(rawText, sectionKey, existingIdsInMock, currentCount
 
   // Hard cap check FIRST, before touching individual rows — this is a
   // strict maximum with no exceptions, so block the whole import up front
-  // and say exactly why, rather than letting it partially land.
-  const resultingTotal = currentCount + parsed.length;
+  // and say exactly why, rather than letting it partially land. Only rows
+  // whose id isn't already in this section count toward the total — a
+  // question being updated in place (same id, new content) isn't a net
+  // addition, so re-uploading a fix for an existing question never trips
+  // this even when the section is already at its cap.
+  const netNewCount = parsed.filter((q) => !q || typeof q !== "object" || !idsInThisSection.has(q.id)).length;
+  const resultingTotal = currentCount + netNewCount;
   if (resultingTotal > maxAllowed) {
     const roomLeft = Math.max(0, maxAllowed - currentCount);
     return {
@@ -295,7 +300,7 @@ function validateImportJSON(rawText, sectionKey, existingIdsInMock, currentCount
       errors: [
         {
           index: null,
-          message: `This section already has ${currentCount}/${maxAllowed}. Importing ${parsed.length} more would make ${resultingTotal}/${maxAllowed} — over the strict maximum. Only ${roomLeft} more question${roomLeft === 1 ? "" : "s"} can be added here. Reduce the batch, or use "Replace Existing Questions" if you want to start this section over.`,
+          message: `This section already has ${currentCount}/${maxAllowed}. Importing ${netNewCount} new question${netNewCount === 1 ? "" : "s"} would make ${resultingTotal}/${maxAllowed} — over the strict maximum. Only ${roomLeft} more new question${roomLeft === 1 ? "" : "s"} can be added here (questions with an id already in this section update in place and don't count against this). Reduce the batch, or use "Replace Existing Questions" if you want to start this section over.`,
         },
       ],
       questions: [],
@@ -313,7 +318,11 @@ function validateImportJSON(rawText, sectionKey, existingIdsInMock, currentCount
     if (!q || typeof q !== "object") return fail("Not a valid question object.");
     if (!q.id || typeof q.id !== "string") return fail("Missing or invalid 'id'.");
     if (seenInBatch.has(q.id)) return fail(`Duplicate id "${q.id}" within this upload.`);
-    if (existingIdsInMock.has(q.id)) return fail(`id "${q.id}" already exists elsewhere in this mock.`);
+    // An id matching one already in THIS section is treated as an update to
+    // that question, not a duplicate — that's the whole point of this mode.
+    // An id belonging to a DIFFERENT section is still rejected: a question's
+    // id should never live in two sections of the same mock at once.
+    if (idsInOtherSections.has(q.id)) return fail(`id "${q.id}" already exists in another section of this mock — wrong upload box?`);
     if (!q.text || typeof q.text !== "string" || !q.text.trim()) return fail("Missing question text.");
     if (!Array.isArray(q.options) || q.options.length !== 4)
       return fail(`Expected exactly 4 options, got ${Array.isArray(q.options) ? q.options.length : "none"}.`);
@@ -1013,9 +1022,12 @@ function SectionManager({ mockId, mock, sectionKey, questions, onQuestionsChange
 
   function handleValidate() {
     const baseCount = importMode === "replace" ? 0 : list.length;
-    const idsToCheckAgainst =
-      importMode === "replace" ? existingIdsExcludingThisSection() : new Set([...list.map((q) => q.id), ...existingIdsExcludingThisSection()]);
-    return validateImportJSON(jsonText, sectionKey, idsToCheckAgainst, baseCount, requiredCount);
+    // In "replace" mode the section is being cleared, so nothing in it counts
+    // as "already here" — every uploaded id is new to this (now-empty)
+    // section. In "add" mode, an id matching one already in this section is
+    // an update-in-place, not a duplicate — see validateImportJSON.
+    const idsInThisSection = importMode === "replace" ? new Set() : new Set(list.map((q) => q.id));
+    return validateImportJSON(jsonText, sectionKey, idsInThisSection, existingIdsExcludingThisSection(), baseCount, requiredCount);
   }
 
   function doImport() {
@@ -1025,7 +1037,13 @@ function SectionManager({ mockId, mock, sectionKey, questions, onQuestionsChange
     if (importMode === "replace") {
       persist(result.questions);
     } else {
-      persist([...list, ...result.questions]);
+      // Add/update: any uploaded question whose id matches one already in
+      // this section replaces it in place (same position); anything with a
+      // genuinely new id is appended after.
+      const byId = new Map(result.questions.map((q) => [q.id, q]));
+      const updated = list.map((q) => byId.get(q.id) || q);
+      const added = result.questions.filter((q) => !list.some((existing) => existing.id === q.id));
+      persist([...updated, ...added]);
     }
     setJsonText("");
     setConfirmReplace(false);
@@ -1122,7 +1140,7 @@ function SectionManager({ mockId, mock, sectionKey, questions, onQuestionsChange
               importMode === "add" ? "bg-blue-900 text-white border-blue-900" : "bg-white text-slate-500 border-slate-200"
             }`}
           >
-            Add to Existing Questions
+            Add / Update Questions
           </button>
           <button
             onClick={() => setImportMode("replace")}
@@ -1136,7 +1154,10 @@ function SectionManager({ mockId, mock, sectionKey, questions, onQuestionsChange
 
         {importMode === "add" && (
           <div className="text-xs text-slate-400 mb-2">
-            {atCap ? "Section is full — no room to add more without deleting some first." : `Room for ${roomLeft} more question${roomLeft === 1 ? "" : "s"}.`}
+            A question with an id already in this section is updated in place — everything else is unaffected.{" "}
+            {atCap
+              ? "This section is full, but you can still fix existing questions by re-uploading their id."
+              : `Room for ${roomLeft} more new question${roomLeft === 1 ? "" : "s"}.`}
           </div>
         )}
         {importMode === "replace" && (
