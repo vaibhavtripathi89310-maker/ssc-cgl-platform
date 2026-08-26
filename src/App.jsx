@@ -4,13 +4,14 @@ import {
   CheckCircle2, XCircle, AlertCircle, ChevronUp, ChevronDown, Upload,
   ArrowLeft, Save, X, Lock, Play, Clock, Flag, Download, LogOut,
   TrendingUp, Target, Youtube, Trophy, Flame, Share2, BarChart2,
-  Swords, ThumbsUp, ThumbsDown, Link2,
+  Swords, ThumbsUp, ThumbsDown, Link2, Activity,
 } from "lucide-react";
 import {
   loadMocksIndex, saveMocksIndex, loadMockQuestions, saveMockQuestions, deleteMockQuestions,
   saveAttempt, loadMockScores, loadDeviceAttempts, loadQuestionsByTopics,
   loadCutoffs, addCutoff, deleteCutoff,
   createChallenge, loadChallenge, claimOpponentSlot, setChallengeReaction, loadAttemptById,
+  loadAttemptsInRange,
 } from "./lib/storage";
 import { signIn, signOut, getSession, onAuthStateChange } from "./lib/auth";
 import { getDeviceId } from "./lib/device";
@@ -405,6 +406,130 @@ function ConfirmModal({ title, body, confirmLabel, danger, onConfirm, onCancel }
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// ANALYTICS — admin-only. Unique devices / total attempts / per-mock
+// breakdown, over any date range the admin picks (or all time). Reuses the
+// same `attempts` rows that already power percentile/leaderboard — just
+// aggregated a different way, client-side, since the row count is small.
+// ============================================================================
+function AnalyticsView({ mocksIndex }) {
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [rows, setRows] = useState([]);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      setRows(await loadAttemptsInRange({ from, to }));
+    } finally {
+      setLoading(false);
+    }
+  }, [from, to]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  function setPreset(days) {
+    const toD = new Date();
+    const fromD = new Date();
+    fromD.setDate(fromD.getDate() - days);
+    setFrom(fromD.toISOString().slice(0, 10));
+    setTo(toD.toISOString().slice(0, 10));
+  }
+  function clearRange() {
+    setFrom("");
+    setTo("");
+  }
+
+  const uniqueDevices = new Set(rows.map((r) => r.device_id)).size;
+
+  const perMock = {};
+  rows.forEach((r) => {
+    if (!perMock[r.mock_id]) perMock[r.mock_id] = { attempts: 0, devices: new Set() };
+    perMock[r.mock_id].attempts += 1;
+    perMock[r.mock_id].devices.add(r.device_id);
+  });
+  const perMockRows = Object.entries(perMock)
+    .map(([mockId, v]) => ({
+      mockId,
+      title: mocksIndex.find((m) => m.id === mockId)?.title || "Deleted mock",
+      attempts: v.attempts,
+      devices: v.devices.size,
+    }))
+    .sort((a, b) => b.attempts - a.attempts);
+
+  return (
+    <div className="max-w-4xl">
+      <div className="bg-white border border-slate-200 rounded-lg p-4 mb-6 flex flex-wrap items-end gap-3">
+        <div>
+          <label className="block text-xs font-medium text-slate-500 mb-1">From</label>
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="text-sm border border-slate-200 rounded-md px-3 py-2" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-500 mb-1">To</label>
+          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="text-sm border border-slate-200 rounded-md px-3 py-2" />
+        </div>
+        <button onClick={() => setPreset(7)} className="text-xs px-3 py-2 rounded-md border border-slate-200 text-slate-600">
+          Last 7 days
+        </button>
+        <button onClick={() => setPreset(30)} className="text-xs px-3 py-2 rounded-md border border-slate-200 text-slate-600">
+          Last 30 days
+        </button>
+        <button onClick={clearRange} className="text-xs px-3 py-2 rounded-md border border-slate-200 text-slate-600">
+          All time
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="text-sm text-slate-400">Loading...</div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-4 mb-6">
+            <div className="bg-white border border-slate-200 rounded-lg p-4">
+              <div className="text-2xl font-semibold text-slate-800">{uniqueDevices}</div>
+              <div className="text-xs text-slate-500 mt-0.5">Unique devices</div>
+            </div>
+            <div className="bg-white border border-slate-200 rounded-lg p-4">
+              <div className="text-2xl font-semibold text-slate-800">{rows.length}</div>
+              <div className="text-xs text-slate-500 mt-0.5">Total attempts</div>
+            </div>
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-100">
+              <h2 className="text-sm font-semibold text-slate-700">Per-mock breakdown</h2>
+            </div>
+            {perMockRows.length === 0 ? (
+              <div className="p-8 text-center text-sm text-slate-400">No attempts in this range.</div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 text-xs text-slate-500">
+                  <tr>
+                    <th className="text-left px-4 py-2">Mock</th>
+                    <th className="text-right px-4 py-2">Attempts</th>
+                    <th className="text-right px-4 py-2">Unique devices</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {perMockRows.map((r) => (
+                    <tr key={r.mockId} className="border-t border-slate-100">
+                      <td className="px-4 py-2 text-slate-700">{r.title}</td>
+                      <td className="px-4 py-2 text-right text-slate-600">{r.attempts}</td>
+                      <td className="px-4 py-2 text-right text-slate-600">{r.devices}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -2691,6 +2816,7 @@ function AdminPanel() {
   const NAV = [
     { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, onClick: goDashboard },
     { key: "list", label: "Mock Tests", icon: ListChecks, onClick: goList },
+    { key: "analytics", label: "Analytics", icon: Activity, onClick: () => setView("analytics") },
     { key: "cutoffs", label: "Cutoffs", icon: BarChart2, onClick: () => setView("cutoffs") },
     { key: "import", label: "Import Data", icon: Upload, onClick: () => setView("import") },
   ];
@@ -2741,6 +2867,7 @@ function AdminPanel() {
           <h1 className="text-sm font-semibold text-slate-800">
             {view === "dashboard" && "Dashboard"}
             {view === "list" && "Mock Tests"}
+            {view === "analytics" && "Analytics"}
             {view === "cutoffs" && "Cutoffs"}
             {view === "import" && "Import Data"}
             {view === "editor" && activeMock?.title}
@@ -2766,6 +2893,7 @@ function AdminPanel() {
               onDeleteRequest={requestDelete}
             />
           )}
+          {view === "analytics" && <AnalyticsView mocksIndex={mocksIndex} />}
           {view === "cutoffs" && <CutoffsView />}
           {view === "import" && <ImportDataView onImport={importData} />}
           {view === "editor" && activeMock && activeQuestions && (

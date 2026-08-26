@@ -204,6 +204,20 @@ export async function loadMockScores(mockId) {
   return data || [];
 }
 
+// Admin analytics — unique devices / total attempts / per-mock breakdown,
+// optionally bounded by a date range (either end may be omitted for an
+// open-ended range). Pulls raw rows and lets the admin screen aggregate
+// client-side, same approach as everywhere else in this app — attempt
+// volume is small enough that this is never going to be a real cost.
+export async function loadAttemptsInRange({ from, to } = {}) {
+  let query = supabase.from("attempts").select("device_id, mock_id, created_at");
+  if (from) query = query.gte("created_at", `${from}T00:00:00.000Z`);
+  if (to) query = query.lte("created_at", `${to}T23:59:59.999Z`);
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
 export async function loadDeviceAttempts(deviceId) {
   const { data, error } = await supabase
     .from("attempts")
