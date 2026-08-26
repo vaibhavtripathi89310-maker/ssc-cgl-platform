@@ -4,11 +4,13 @@ import {
   CheckCircle2, XCircle, AlertCircle, ChevronUp, ChevronDown, Upload,
   ArrowLeft, Save, X, Lock, Play, Clock, Flag, Download, LogOut,
   TrendingUp, Target, Youtube, Trophy, Flame, Share2, BarChart2,
+  Swords, ThumbsUp, ThumbsDown, Link2,
 } from "lucide-react";
 import {
   loadMocksIndex, saveMocksIndex, loadMockQuestions, saveMockQuestions, deleteMockQuestions,
   saveAttempt, loadMockScores, loadDeviceAttempts, loadQuestionsByTopics,
   loadCutoffs, addCutoff, deleteCutoff,
+  createChallenge, loadChallenge, claimOpponentSlot, setChallengeReaction, loadAttemptById,
 } from "./lib/storage";
 import { signIn, signOut, getSession, onAuthStateChange } from "./lib/auth";
 import { getDeviceId } from "./lib/device";
@@ -1660,7 +1662,7 @@ function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight) {
 // questions. Distinct from PreviewView: no answers shown, real countdown per
 // section, auto-advances when time is up, gives a score at the end.
 // ============================================================================
-function RunMockView({ mock, questions, onExit }) {
+function RunMockView({ mock, questions, onExit, challengeId }) {
   const [sectionIdx, setSectionIdx] = useState(0);
   const [qIdx, setQIdx] = useState(0);
   const [answers, setAnswers] = useState({}); // questionId -> optionIndex
@@ -1849,6 +1851,8 @@ function RunMockView({ mock, questions, onExit }) {
   const [leaderboard, setLeaderboard] = useState([]);
   const [myAttemptId, setMyAttemptId] = useState(null);
   const [cutoffs, setCutoffs] = useState([]);
+  const [challengeClaim, setChallengeClaim] = useState(null); // 'claimed' | 'taken' | null (only relevant when challengeId prop is set)
+  const [myChallengeLink, setMyChallengeLink] = useState(null); // set after creating a NEW challenge from a solo attempt
   useEffect(() => {
     if (!finished) return;
     const { score, correct, incorrect, skipped, topicRows } = computeResults();
@@ -1867,11 +1871,17 @@ function RunMockView({ mock, questions, onExit }) {
           skipped,
           totalTime,
           topicBreakdown: topicRows,
+          answers,
+          timeSpent,
         });
         const rows = await loadMockScores(mock.id); // [{id, score}], best first
         const better = rows.filter((r) => r.score < score).length;
         setPercentile(rows.length > 1 ? Math.round((better / rows.length) * 100) : null);
         setLeaderboard(rows.slice(0, 5));
+        if (challengeId) {
+          const claimed = await claimOpponentSlot(challengeId, attemptId);
+          setChallengeClaim(claimed ? "claimed" : "taken");
+        }
       } catch {
         // Non-critical — the results screen works fine without this.
       }
@@ -1886,6 +1896,17 @@ function RunMockView({ mock, questions, onExit }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finished]);
+
+  async function handleChallengeAFriend() {
+    if (!myAttemptId) return;
+    const id = generateId("ch");
+    try {
+      await createChallenge({ id, mockId: mock.id, creatorAttemptId: myAttemptId });
+      setMyChallengeLink(`${window.location.origin}/challenge/${id}`);
+    } catch {
+      // Non-critical — the rest of the results screen still works.
+    }
+  }
 
   if (finished) {
     const { correct, incorrect, skipped, sectionBreakdown, score, topicRows, weakTopics, strongTopics } = computeResults();
@@ -1948,6 +1969,59 @@ function RunMockView({ mock, questions, onExit }) {
         <div className="max-w-md w-full mt-6">
           <ShareResultCard mock={mock} score={score} totalMarks={mock.totalMarks} />
         </div>
+
+        {challengeId ? (
+          <div className="max-w-md w-full mt-6 bg-white border border-slate-200 rounded-2xl p-5 text-center">
+            <Swords size={20} className="mx-auto mb-2 text-blue-700" />
+            <h3 className="text-sm font-semibold text-slate-700 mb-1">
+              {challengeClaim === "taken" ? "This challenge was already completed" : "Challenge accepted!"}
+            </h3>
+            <p className="text-xs text-slate-500 mb-4">
+              {challengeClaim === "taken"
+                ? "Someone else already finished this challenge first — your attempt was still saved, just not linked to it."
+                : "See the full side-by-side answer sheet with whoever sent you this."}
+            </p>
+            {challengeClaim === "claimed" && (
+              <a href={`/challenge/${challengeId}`} className="inline-block bg-blue-900 text-white text-sm font-medium px-4 py-2 rounded-lg">
+                View comparison →
+              </a>
+            )}
+          </div>
+        ) : (
+          <div className="max-w-md w-full mt-6 bg-white border border-slate-200 rounded-2xl p-5">
+            <h3 className="text-sm font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
+              <Swords size={15} className="text-blue-700" /> Challenge a friend
+            </h3>
+            <p className="text-xs text-slate-400 mb-3">
+              Send this exact mock to a friend — once they finish, you'll both see a full side-by-side answer sheet.
+            </p>
+            {myChallengeLink ? (
+              <div className="flex items-center gap-2">
+                <input
+                  readOnly
+                  value={myChallengeLink}
+                  onClick={(e) => e.target.select()}
+                  className="flex-1 text-xs border border-slate-200 rounded-md px-3 py-2 text-slate-600"
+                />
+                <button
+                  onClick={() => navigator.clipboard?.writeText(myChallengeLink)}
+                  className="shrink-0 text-xs px-3 py-2 rounded-md border border-slate-200 text-slate-600"
+                  title="Copy link"
+                >
+                  <Link2 size={13} />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={handleChallengeAFriend}
+                disabled={!myAttemptId}
+                className="w-full flex items-center justify-center gap-2 bg-blue-900 text-white text-sm font-medium py-2.5 rounded-lg disabled:opacity-50"
+              >
+                <Swords size={15} /> Create Challenge Link
+              </button>
+            )}
+          </div>
+        )}
 
         {leaderboard.length > 0 && (
           <div className="max-w-md w-full mt-6 bg-white border border-slate-200 rounded-2xl p-5 text-left">
@@ -3361,6 +3435,325 @@ function AdminGate({ children }) {
   );
 }
 
+// Text shown when one side reacts to the other's performance — deliberately
+// a small fixed set of templates (not free text) since there's no login or
+// moderation on this app; "reaction" is who SENT it, the scores tell us
+// whether it reads as a genuine compliment or friendly trash talk.
+function challengeNoteFor(reaction, senderScore, receiverScore) {
+  if (reaction === "up") {
+    return receiverScore >= senderScore
+      ? "You beat me fair and square — well played! 🎉"
+      : "Solid effort — respect for taking on the challenge! 👏";
+  }
+  if (reaction === "down") {
+    return receiverScore < senderScore
+      ? "Better luck next time — I've got the edge this round 😏"
+      : "You got me this time, but I'm coming back stronger next round! 💪";
+  }
+  return null;
+}
+
+// ============================================================================
+// CHALLENGE COMPARISON — the full side-by-side answer sheet once both the
+// creator and opponent have finished: score comparison, per-question
+// answer+time for both people, and a thumbs-up/down + auto-note exchange.
+// ============================================================================
+function ChallengeComparisonView({ challenge, mock, questions, creatorAttempt, opponentAttempt, myRole, onReactionSent }) {
+  const sections = sectionsForMock(mock);
+  const myAttempt = myRole === "opponent" ? opponentAttempt : creatorAttempt;
+  const theirAttempt = myRole === "opponent" ? creatorAttempt : opponentAttempt;
+  const myReaction = myRole === "creator" ? challenge.creatorReaction : challenge.opponentReaction;
+  const theirReaction = myRole === "creator" ? challenge.opponentReaction : challenge.creatorReaction;
+  const [sending, setSending] = useState(false);
+
+  async function react(type) {
+    setSending(true);
+    try {
+      await setChallengeReaction(challenge.id, myRole, type);
+      onReactionSent();
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-100 flex flex-col items-center py-10 px-4">
+      <div className="max-w-md w-full bg-white border border-slate-200 rounded-2xl shadow-sm p-8 text-center">
+        <Swords size={28} className="mx-auto mb-3 text-blue-700" />
+        <h1 className="text-lg font-semibold text-slate-800 mb-1">{mock.title}</h1>
+        <p className="text-xs text-slate-400 mb-5">Challenge result</p>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <div className={`text-3xl font-bold ${myAttempt.score >= theirAttempt.score ? "text-emerald-600" : "text-slate-500"}`}>
+              {myAttempt.score}
+            </div>
+            <div className="text-xs text-slate-400">You</div>
+          </div>
+          <div>
+            <div className={`text-3xl font-bold ${theirAttempt.score > myAttempt.score ? "text-emerald-600" : "text-slate-500"}`}>
+              {theirAttempt.score}
+            </div>
+            <div className="text-xs text-slate-400">Them</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-md w-full mt-4 bg-white border border-slate-200 rounded-2xl p-5">
+        {theirReaction && (
+          <div className="bg-blue-50 border border-blue-200 rounded-md px-3 py-2 text-sm text-blue-800 mb-3">
+            Your friend sent you {theirReaction === "up" ? "👍" : "👎"} — "
+            {challengeNoteFor(theirReaction, theirAttempt.score, myAttempt.score)}"
+          </div>
+        )}
+        {myReaction ? (
+          <p className="text-xs text-slate-400">You reacted {myReaction === "up" ? "👍" : "👎"} to their performance.</p>
+        ) : (
+          <div>
+            <p className="text-xs text-slate-500 mb-2">React to your friend's performance:</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => react("up")}
+                disabled={sending}
+                className="flex-1 flex items-center justify-center gap-1.5 text-sm border border-slate-200 rounded-lg py-2 hover:bg-emerald-50 hover:border-emerald-300 disabled:opacity-50"
+              >
+                <ThumbsUp size={15} /> Thumbs up
+              </button>
+              <button
+                onClick={() => react("down")}
+                disabled={sending}
+                className="flex-1 flex items-center justify-center gap-1.5 text-sm border border-slate-200 rounded-lg py-2 hover:bg-red-50 hover:border-red-300 disabled:opacity-50"
+              >
+                <ThumbsDown size={15} /> Thumbs down
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="max-w-2xl w-full mt-6 space-y-3">
+        <h3 className="text-sm font-semibold text-slate-700 px-1">Answer sheet — you vs. them</h3>
+        {sections.map((s) =>
+          (questions[s.key] || []).map((qq, i) => {
+            const mySel = myAttempt.answers?.[qq.id];
+            const theirSel = theirAttempt.answers?.[qq.id];
+            const myTime = myAttempt.timeSpent?.[qq.id] || 0;
+            const theirTime = theirAttempt.timeSpent?.[qq.id] || 0;
+            const myCorrect = mySel === qq.answer;
+            const theirCorrect = theirSel === qq.answer;
+            return (
+              <div key={qq.id} className="bg-white border border-slate-200 rounded-xl p-5 text-left">
+                <div className="text-xs text-slate-400 mb-2">
+                  {s.label} · Q{i + 1}
+                </div>
+                <p className="text-sm text-slate-800 mb-3">
+                  <MathText text={qq.text} />
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div
+                    className={`rounded-md px-3 py-2 border ${
+                      mySel === undefined ? "border-slate-200 bg-slate-50" : myCorrect ? "border-emerald-300 bg-emerald-50" : "border-red-300 bg-red-50"
+                    }`}
+                  >
+                    <div className="font-medium text-slate-600 mb-1">You</div>
+                    <div className="text-slate-700">{mySel !== undefined ? `${LETTERS[mySel]}. ${qq.options[mySel]}` : "Skipped"}</div>
+                    <div className="text-slate-400 mt-1">{formatTime(myTime)}</div>
+                  </div>
+                  <div
+                    className={`rounded-md px-3 py-2 border ${
+                      theirSel === undefined ? "border-slate-200 bg-slate-50" : theirCorrect ? "border-emerald-300 bg-emerald-50" : "border-red-300 bg-red-50"
+                    }`}
+                  >
+                    <div className="font-medium text-slate-600 mb-1">Them</div>
+                    <div className="text-slate-700">{theirSel !== undefined ? `${LETTERS[theirSel]}. ${qq.options[theirSel]}` : "Skipped"}</div>
+                    <div className="text-slate-400 mt-1">{formatTime(theirTime)}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// CHALLENGE FLOW — top-level view for /challenge/:code. Works out who's
+// viewing (creator, opponent, or a fresh visitor) purely by comparing this
+// device's id against the two attempts' device ids, and routes to the right
+// state: accept-and-take-it, waiting-on-your-friend, already-taken-by-
+// someone-else, or the full comparison.
+// ============================================================================
+function ChallengeFlow({ code }) {
+  const [state, setState] = useState("loading");
+  const [challenge, setChallenge] = useState(null);
+  const [mock, setMock] = useState(null);
+  const [questions, setQuestions] = useState(null);
+  const [creatorAttempt, setCreatorAttempt] = useState(null);
+  const [opponentAttempt, setOpponentAttempt] = useState(null);
+  const [myRole, setMyRole] = useState(null);
+
+  const load = useCallback(async () => {
+    setState("loading");
+    const ch = await loadChallenge(code);
+    if (!ch) {
+      setState("not-found");
+      return;
+    }
+    setChallenge(ch);
+
+    const [mocksIdx, cAttempt] = await Promise.all([loadMocksIndex(), loadAttemptById(ch.creatorAttemptId)]);
+    const m = mocksIdx.find((mm) => mm.id === ch.mockId);
+    setMock(m || null);
+    setCreatorAttempt(cAttempt);
+
+    let oAttempt = null;
+    if (ch.opponentAttemptId) {
+      oAttempt = await loadAttemptById(ch.opponentAttemptId);
+      setOpponentAttempt(oAttempt);
+    }
+
+    if (!m) {
+      setState("not-found");
+      return;
+    }
+
+    const myDevice = getDeviceId();
+    let role = "stranger";
+    if (cAttempt && cAttempt.deviceId === myDevice) role = "creator";
+    else if (oAttempt && oAttempt.deviceId === myDevice) role = "opponent";
+    setMyRole(role);
+
+    // A third visitor who isn't either participant never sees the
+    // comparison or attempt data — just a neutral "already completed"
+    // message, regardless of whether the challenge is still in progress or
+    // fully done. Only the creator/opponent themselves ever see results.
+    if (role === "stranger") {
+      setState(ch.opponentAttemptId ? "already-taken" : "landing");
+    } else if (cAttempt && oAttempt) {
+      const q = await loadMockQuestions(ch.mockId);
+      setQuestions(q);
+      setState("comparison");
+    } else {
+      setState("waiting");
+    }
+  }, [code]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function accept() {
+    const q = await loadMockQuestions(mock.id);
+    setQuestions(q);
+    setState("instructions");
+  }
+
+  if (state === "loading") {
+    return <div className="min-h-screen flex items-center justify-center text-sm text-slate-400">Loading challenge...</div>;
+  }
+
+  if (state === "not-found") {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <div className="text-center bg-white border border-dashed border-slate-300 rounded-xl p-10 text-sm text-slate-400 max-w-sm">
+          This challenge link doesn't exist, or the mock it was for isn't available anymore.
+          <div className="mt-4">
+            <a href="/" className="text-sm px-4 py-2 rounded-md border border-slate-200 text-slate-600 inline-block">
+              Go to SSC CGL Mock Tests
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (state === "already-taken") {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <div className="text-center bg-white border border-dashed border-slate-300 rounded-xl p-10 text-sm text-slate-400 max-w-sm">
+          Someone already accepted this challenge. Ask your friend to send you a fresh one if you want to compete too.
+          <div className="mt-4">
+            <a href="/" className="text-sm px-4 py-2 rounded-md border border-slate-200 text-slate-600 inline-block">
+              Go to SSC CGL Mock Tests
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (state === "landing") {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white border border-slate-200 rounded-2xl p-8 text-center">
+          <Swords size={32} className="mx-auto mb-4 text-blue-700" />
+          <h1 className="text-lg font-semibold text-slate-800 mb-1">You've been challenged!</h1>
+          <p className="text-sm text-slate-500 mb-6">
+            A friend wants to see how you do on <span className="font-medium text-slate-700">{mock.title}</span>. Take it now
+            and you'll both get a full side-by-side comparison once you're done.
+          </p>
+          <button onClick={accept} className="w-full bg-blue-900 text-white text-sm font-medium rounded-lg py-3">
+            Accept Challenge
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (state === "waiting") {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white border border-slate-200 rounded-2xl p-8 text-center">
+          <Swords size={32} className="mx-auto mb-4 text-slate-300" />
+          <h1 className="text-lg font-semibold text-slate-800 mb-1">Waiting for your friend</h1>
+          <p className="text-sm text-slate-500 mb-6">
+            Check back once they've taken the test — this page will show the full comparison automatically.
+          </p>
+          <button onClick={load} className="text-sm px-4 py-2 rounded-md border border-slate-200 text-slate-600">
+            Check again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (state === "instructions") {
+    const sections = sectionsForMock(mock);
+    const questionCount = sections.reduce((sum, s) => sum + (questions[s.key]?.length || 0), 0);
+    return (
+      <div className="min-h-screen bg-slate-50 p-6">
+        <StudentInstructionsView
+          mock={mock}
+          questionCount={questionCount}
+          onStart={() => setState("run")}
+          onBack={() => setState("landing")}
+        />
+      </div>
+    );
+  }
+
+  if (state === "run") {
+    return <RunMockView mock={mock} questions={questions} onExit={() => (window.location.href = "/")} challengeId={code} />;
+  }
+
+  if (state === "comparison") {
+    return (
+      <ChallengeComparisonView
+        challenge={challenge}
+        mock={mock}
+        questions={questions}
+        creatorAttempt={creatorAttempt}
+        opponentAttempt={opponentAttempt}
+        myRole={myRole}
+        onReactionSent={load}
+      />
+    );
+  }
+
+  return null;
+}
+
 export default function App() {
   const [path, setPath] = useState(window.location.pathname);
 
@@ -3371,6 +3764,11 @@ export default function App() {
   }, []);
 
   const isAdmin = path.startsWith("/admin");
+  const challengeMatch = path.match(/^\/challenge\/([A-Za-z0-9_-]+)/);
+
+  if (challengeMatch) {
+    return <ChallengeFlow code={challengeMatch[1]} />;
+  }
 
   if (isAdmin) {
     return (

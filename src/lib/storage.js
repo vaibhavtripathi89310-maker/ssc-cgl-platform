@@ -164,8 +164,30 @@ export async function saveAttempt(attempt) {
     skipped: attempt.skipped,
     total_time: attempt.totalTime,
     topic_breakdown: attempt.topicBreakdown,
+    answers: attempt.answers,
+    time_spent: attempt.timeSpent,
   });
   if (error) throw error;
+}
+
+export async function loadAttemptById(id) {
+  const { data, error } = await supabase.from("attempts").select("*").eq("id", id).maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return {
+    id: data.id,
+    deviceId: data.device_id,
+    mockId: data.mock_id,
+    score: data.score,
+    correct: data.correct,
+    incorrect: data.incorrect,
+    skipped: data.skipped,
+    totalTime: data.total_time,
+    topicBreakdown: data.topic_breakdown || [],
+    answers: data.answers || {},
+    timeSpent: data.time_spent || {},
+    createdAt: data.created_at,
+  };
 }
 
 // Every attempt's id+score for a mock, sorted best-first — powers both
@@ -239,5 +261,50 @@ export async function addCutoff(cutoff) {
 
 export async function deleteCutoff(id) {
   const { error } = await supabase.from("cutoffs").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// ============================================================================
+// CHALLENGES — async "challenge a friend": one attempt creates a shareable
+// link, whoever opens it takes the same mock, and once both are done either
+// side can view a full side-by-side answer sheet. No login involved — "who
+// am I in this challenge" is worked out by matching this device's id against
+// the device_id on the creator/opponent attempt rows.
+// ============================================================================
+export async function createChallenge({ id, mockId, creatorAttemptId }) {
+  const { error } = await supabase.from("challenges").insert({ id, mock_id: mockId, creator_attempt_id: creatorAttemptId });
+  if (error) throw error;
+}
+
+export async function loadChallenge(id) {
+  const { data, error } = await supabase.from("challenges").select("*").eq("id", id).maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return {
+    id: data.id,
+    mockId: data.mock_id,
+    creatorAttemptId: data.creator_attempt_id,
+    opponentAttemptId: data.opponent_attempt_id,
+    creatorReaction: data.creator_reaction,
+    opponentReaction: data.opponent_reaction,
+  };
+}
+
+// Only succeeds if nobody has claimed the opponent slot yet — guards against
+// two different people opening the same link and both trying to accept it.
+export async function claimOpponentSlot(challengeId, attemptId) {
+  const { data, error } = await supabase
+    .from("challenges")
+    .update({ opponent_attempt_id: attemptId })
+    .eq("id", challengeId)
+    .is("opponent_attempt_id", null)
+    .select("id");
+  if (error) throw error;
+  return (data || []).length > 0;
+}
+
+export async function setChallengeReaction(challengeId, role, reaction) {
+  const column = role === "creator" ? "creator_reaction" : "opponent_reaction";
+  const { error } = await supabase.from("challenges").update({ [column]: reaction }).eq("id", challengeId);
   if (error) throw error;
 }
