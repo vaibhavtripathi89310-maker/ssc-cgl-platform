@@ -144,7 +144,13 @@ function parseMathSegment(segment, keyPrefix) {
 }
 
 function parseWithFractions(segment, keyPrefix) {
-  const fracPattern = /(\([^)]+\)|\{[^}]+\}|[A-Za-z0-9]+(?:\^[A-Za-z0-9(){}]+)?)\/(\([^)]+\)|\{[^}]+\}|[A-Za-z0-9]+(?:\^[A-Za-z0-9(){}]+)?)/;
+  // The bare (unbracketed) side of a fraction only matches a number or a
+  // single letter — e.g. 1/x, 5/9, x^2/y — never a whole word. Without this,
+  // ordinary English like "is/are", "he/she", "km/hr" gets misread as a
+  // fraction and stacked, which is wrong; an admin can still force a real
+  // fraction with multi-letter terms by wrapping them in parentheses.
+  const fracPattern =
+    /(\([^)]+\)|\{[^}]+\}|\b\d+(?:\.\d+)?\b(?:\^[A-Za-z0-9(){}]+)?|\b[A-Za-z]\b(?:\^[A-Za-z0-9(){}]+)?)\/(\([^)]+\)|\{[^}]+\}|\b\d+(?:\.\d+)?\b(?:\^[A-Za-z0-9(){}]+)?|\b[A-Za-z]\b(?:\^[A-Za-z0-9(){}]+)?)/;
   const match = segment.match(fracPattern);
   if (!match) return parseMathSegment(segment, keyPrefix);
 
