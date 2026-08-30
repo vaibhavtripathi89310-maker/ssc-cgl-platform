@@ -180,13 +180,60 @@ function MathText({ text }) {
 // ============================================================================
 // CONSTANTS
 // ============================================================================
-const SECTIONS = [
-  { key: "gi_reasoning", label: "General Intelligence & Reasoning" },
-  { key: "general_awareness", label: "General Awareness" },
-  { key: "quant_aptitude", label: "Quantitative Aptitude" },
-  { key: "english_comprehension", label: "English Comprehension" },
-];
-const REQUIRED_PER_SECTION = 25;
+// EXAMS — the platform supports more than one exam now; everything that used
+// to be a single hardcoded SECTIONS array is keyed by exam instead. Section
+// keys are unique across every exam here (never reused), which is what lets
+// most call sites below key a lookup purely off a section key without also
+// needing to know which exam it belongs to.
+const EXAMS = {
+  ssc_cgl: {
+    key: "ssc_cgl",
+    label: "SSC CGL",
+    tagline: "SSC CGL Tier-I — General Intelligence, General Awareness, Quant & English.",
+    sections: [
+      { key: "gi_reasoning", label: "General Intelligence & Reasoning", short: "REASONING", questionCount: 25 },
+      { key: "general_awareness", label: "General Awareness", short: "GA", questionCount: 25 },
+      { key: "quant_aptitude", label: "Quantitative Aptitude", short: "QUANT", questionCount: 25 },
+      { key: "english_comprehension", label: "English Comprehension", short: "ENGLISH", questionCount: 25 },
+    ],
+    hasNegativeMarking: true,
+    defaultNegativeMarking: 0.5,
+    fullDuration: 60,
+    fullTotalMarks: 200,
+  },
+  gmat: {
+    key: "gmat",
+    label: "GMAT",
+    tagline: "GMAT Focus Edition — Quantitative Reasoning, Verbal Reasoning & Data Insights.",
+    sections: [
+      { key: "quant", label: "Quantitative Reasoning", short: "QUANT", questionCount: 21 },
+      { key: "verbal", label: "Verbal Reasoning", short: "VERBAL", questionCount: 23 },
+      { key: "data_insights", label: "Data Insights", short: "DI", questionCount: 20 },
+    ],
+    hasNegativeMarking: false,
+    defaultNegativeMarking: 0,
+    fullDuration: 135,
+    fullTotalMarks: 64,
+  },
+};
+const EXAM_LIST = Object.values(EXAMS);
+const DEFAULT_EXAM = "ssc_cgl";
+// Flat list of every section across every exam — safe to use wherever a
+// lookup only needs a section's key/label and doesn't care which exam it's
+// from (e.g. resolving a badge, or sweeping for orphaned questions left
+// behind after an admin switches a mock's exam).
+const ALL_SECTIONS = EXAM_LIST.flatMap((e) => e.sections);
+
+// Backward compatibility: any mock created before multi-exam support (or any
+// mock object that's momentarily undefined during a render) has no `exam`
+// field at all — treat that as SSC CGL, the exam this platform launched with.
+function getExamKey(mock) {
+  return mock && EXAMS[mock.exam] ? mock.exam : DEFAULT_EXAM;
+}
+function getExam(mock) {
+  return EXAMS[getExamKey(mock)];
+}
+
 const MOCK_TYPES = { FULL: "full", SECTIONAL: "sectional" };
 // Backward compatibility: any mock created before this feature existed (or
 // any mock object that's momentarily undefined during a render) has no
@@ -196,31 +243,35 @@ const MOCK_TYPES = { FULL: "full", SECTIONAL: "sectional" };
 function getMockType(mock) {
   return mock && mock.mockType === MOCK_TYPES.SECTIONAL ? MOCK_TYPES.SECTIONAL : MOCK_TYPES.FULL;
 }
-// Sections a given mock actually uses — Full Mock uses all four (unchanged
-// behavior, including for any old mock with no mockType); Sectional Mock
-// uses exactly the one section it was created for.
+// Sections a given mock actually uses — Full Mock uses every section of its
+// exam (unchanged behavior, including for any old mock with no mockType);
+// Sectional Mock uses exactly the one section it was created for.
 function sectionsForMock(mock) {
+  const exam = getExam(mock);
   if (getMockType(mock) === MOCK_TYPES.SECTIONAL) {
-    const found = SECTIONS.filter((s) => s.key === mock.sectionalKey);
-    // If sectionalKey is somehow missing/invalid, fall back to all sections
-    // rather than returning an empty list that would render a blank app.
-    return found.length ? found : SECTIONS;
+    const found = exam.sections.filter((s) => s.key === mock.sectionalKey);
+    // If sectionalKey is somehow missing/invalid, fall back to all of this
+    // exam's sections rather than returning an empty list that would render
+    // a blank app.
+    return found.length ? found : exam.sections;
   }
-  return SECTIONS;
+  return exam.sections;
 }
-// How many questions a given section must have in THIS mock — 25 for every
-// section of a Full Mock (unchanged), or the admin-configured count for the
-// one section of a Sectional Mock.
+// How many questions a given section must have in THIS mock — the section's
+// standard count for every section of a Full Mock (unchanged), or the
+// admin-configured count for the one section of a Sectional Mock.
 function requiredCountFor(mock, sectionKey) {
+  const section = getExam(mock).sections.find((s) => s.key === sectionKey);
+  const standardCount = section?.questionCount || 25;
   if (getMockType(mock) === MOCK_TYPES.SECTIONAL) {
-    return mock.sectionalKey === sectionKey ? mock.sectionalQuestionCount || REQUIRED_PER_SECTION : 0;
+    return mock.sectionalKey === sectionKey ? mock.sectionalQuestionCount || standardCount : 0;
   }
-  return REQUIRED_PER_SECTION;
+  return standardCount;
 }
 function mockTypeBadgeLabel(mock) {
   if (getMockType(mock) === MOCK_TYPES.SECTIONAL) {
-    const short = { gi_reasoning: "REASONING", general_awareness: "GA", quant_aptitude: "QUANT", english_comprehension: "ENGLISH" };
-    return `SECTIONAL — ${short[mock.sectionalKey] || "?"}`;
+    const section = getExam(mock).sections.find((s) => s.key === mock.sectionalKey);
+    return `SECTIONAL — ${section?.short || "?"}`;
   }
   return "FULL MOCK";
 }
@@ -253,18 +304,26 @@ function formatTime(totalSec) {
   return `${m}:${s}`;
 }
 const nextMockNumber = (list) => (list.length ? Math.max(...list.map((m) => m.mockNumber || 0)) + 1 : 1);
-const sectionLabel = (key) => SECTIONS.find((s) => s.key === key)?.label || key;
-const emptySectionMap = () => Object.fromEntries(SECTIONS.map((s) => [s.key, []]));
+const sectionLabel = (key) => ALL_SECTIONS.find((s) => s.key === key)?.label || key;
+const emptySectionMap = () => Object.fromEntries(ALL_SECTIONS.map((s) => [s.key, []]));
 
-function normalizeSectionLabel(input) {
+// `candidateSections` scopes the match to one exam's sections (e.g. the mock
+// being imported into) — this matters because a couple of section names
+// overlap in spirit across exams ("Quant" means something in both SSC CGL
+// and GMAT), so matching against every exam at once could resolve to the
+// wrong exam's section key.
+function normalizeSectionLabel(input, candidateSections = ALL_SECTIONS) {
   if (!input || typeof input !== "string") return null;
   const s = input.trim().toLowerCase();
-  const found = SECTIONS.find((sec) => {
+  const found = candidateSections.find((sec) => {
     if (sec.label.toLowerCase() === s || sec.key === s) return true;
     if (sec.key === "gi_reasoning" && s.includes("reasoning")) return true;
     if (sec.key === "general_awareness" && (s.includes("awareness") || s === "ga")) return true;
     if (sec.key === "quant_aptitude" && (s.includes("quant") || s.includes("maths") || s.includes("math"))) return true;
     if (sec.key === "english_comprehension" && s.includes("english")) return true;
+    if (sec.key === "quant" && (s.includes("quant") || s.includes("math"))) return true;
+    if (sec.key === "verbal" && (s.includes("verbal") || s.includes("reading") || s.includes("critical"))) return true;
+    if (sec.key === "data_insights" && (s.includes("data") || s.includes("insight"))) return true;
     return false;
   });
   return found ? found.key : null;
@@ -280,7 +339,7 @@ function normalizeSectionLabel(input) {
 // ============================================================================
 // VALIDATION — all-or-nothing: any invalid row blocks the entire import
 // ============================================================================
-function validateImportJSON(rawText, sectionKey, idsInThisSection, idsInOtherSections, currentCount, maxAllowed) {
+function validateImportJSON(rawText, sectionKey, idsInThisSection, idsInOtherSections, currentCount, maxAllowed, examSections = ALL_SECTIONS) {
   let parsed;
   try {
     parsed = JSON.parse(rawText);
@@ -340,7 +399,7 @@ function validateImportJSON(rawText, sectionKey, idsInThisSection, idsInOtherSec
     if (![0, 1, 2, 3].includes(q.answer)) return fail(`Invalid answer index "${q.answer}" — must be 0, 1, 2, or 3.`);
     if (!q.explanation || typeof q.explanation !== "string" || !q.explanation.trim()) return fail("Missing explanation.");
     if (q.section) {
-      const normalized = normalizeSectionLabel(q.section);
+      const normalized = normalizeSectionLabel(q.section, examSections);
       if (normalized && normalized !== sectionKey) {
         return fail(`"section": "${q.section}" doesn't match ${sectionLabel(sectionKey)} — wrong upload box?`);
       }
@@ -429,9 +488,16 @@ function ConfirmModal({ title, body, confirmLabel, danger, onConfirm, onCancel }
 function AnalyticsView({ mocksIndex }) {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [examFilter, setExamFilter] = useState("all"); // 'all' | 'ssc_cgl' | 'gmat'
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState([]);
   const [questionStats, setQuestionStats] = useState({});
+  const mockExamById = Object.fromEntries(mocksIndex.map((m) => [m.id, getExamKey(m)]));
+  // Once an exam other than SSC CGL exists, mixing both exams' numbers into
+  // one set of stats is actively misleading (different scoring, different
+  // audience) — this scopes every metric below to the chosen exam, without
+  // re-fetching (the date-range fetch stays exam-agnostic).
+  const scopedRows = examFilter === "all" ? rows : rows.filter((r) => (mockExamById[r.mockId] || "ssc_cgl") === examFilter);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -485,27 +551,27 @@ function AnalyticsView({ mocksIndex }) {
   }
 
   // --- Overview ---
-  const uniqueDevices = new Set(rows.map((r) => r.deviceId)).size;
+  const uniqueDevices = new Set(scopedRows.map((r) => r.deviceId)).size;
   const attemptsPerDevice = {};
-  rows.forEach((r) => {
+  scopedRows.forEach((r) => {
     attemptsPerDevice[r.deviceId] = (attemptsPerDevice[r.deviceId] || 0) + 1;
   });
   const returningDevices = Object.values(attemptsPerDevice).filter((n) => n >= 2).length;
   const oneTimeDevices = uniqueDevices - returningDevices;
-  const avgAccuracy = rows.length
+  const avgAccuracy = scopedRows.length
     ? Math.round(
-        (rows.reduce((sum, r) => {
+        (scopedRows.reduce((sum, r) => {
           const total = r.correct + r.incorrect + r.skipped;
           return sum + (total ? r.correct / total : 0);
         }, 0) /
-          rows.length) *
+          scopedRows.length) *
           100
       )
     : null;
 
   // --- Daily trend ---
   const byDay = {};
-  rows.forEach((r) => {
+  scopedRows.forEach((r) => {
     const day = r.createdAt.slice(0, 10);
     if (!byDay[day]) byDay[day] = { attempts: 0, devices: new Set() };
     byDay[day].attempts += 1;
@@ -516,7 +582,7 @@ function AnalyticsView({ mocksIndex }) {
 
   // --- Per-mock breakdown ---
   const perMock = {};
-  rows.forEach((r) => {
+  scopedRows.forEach((r) => {
     if (!perMock[r.mockId]) perMock[r.mockId] = { attempts: 0, devices: new Set(), scoreSum: 0, accSum: 0 };
     const p = perMock[r.mockId];
     p.attempts += 1;
@@ -538,7 +604,7 @@ function AnalyticsView({ mocksIndex }) {
 
   // --- Audience-wide weak topics ---
   const topicAgg = {};
-  rows.forEach((r) => {
+  scopedRows.forEach((r) => {
     (r.topicBreakdown || []).forEach((t) => {
       if (!topicAgg[t.topic]) topicAgg[t.topic] = { correct: 0, total: 0 };
       topicAgg[t.topic].correct += t.correct;
@@ -557,7 +623,7 @@ function AnalyticsView({ mocksIndex }) {
   // --- Toughest questions (min 3 answers so one fluke doesn't dominate) ---
   const toughestQuestions = Object.entries(questionStats)
     .map(([qId, v]) => ({ qId, ...v, accuracy: v.correct / v.attempted }))
-    .filter((q) => q.attempted >= 3)
+    .filter((q) => q.attempted >= 3 && (examFilter === "all" || (mockExamById[q.mockId] || "ssc_cgl") === examFilter))
     .sort((a, b) => a.accuracy - b.accuracy)
     .slice(0, 10);
 
@@ -581,11 +647,21 @@ function AnalyticsView({ mocksIndex }) {
         <button onClick={clearRange} className="text-xs px-3 py-2 rounded-md border border-slate-200 text-slate-600">
           All time
         </button>
+        <select
+          value={examFilter}
+          onChange={(e) => setExamFilter(e.target.value)}
+          className="text-sm border border-slate-200 rounded-md px-3 py-2"
+        >
+          <option value="all">All exams</option>
+          {EXAM_LIST.map((exam) => (
+            <option key={exam.key} value={exam.key}>{exam.label}</option>
+          ))}
+        </select>
       </div>
 
       {loading ? (
         <div className="text-sm text-slate-400">Loading...</div>
-      ) : rows.length === 0 ? (
+      ) : scopedRows.length === 0 ? (
         <div className="bg-white border border-dashed border-slate-200 rounded-xl p-12 text-center text-sm text-slate-400">
           No attempts in this range.
         </div>
@@ -597,7 +673,7 @@ function AnalyticsView({ mocksIndex }) {
               <div className="text-xs text-slate-500 mt-0.5">Unique devices</div>
             </div>
             <div className="bg-white border border-slate-200 rounded-lg p-4">
-              <div className="text-2xl font-semibold text-slate-800">{rows.length}</div>
+              <div className="text-2xl font-semibold text-slate-800">{scopedRows.length}</div>
               <div className="text-xs text-slate-500 mt-0.5">Total attempts</div>
             </div>
             <div className="bg-white border border-slate-200 rounded-lg p-4">
@@ -1001,6 +1077,7 @@ function MockListView({ mocksIndex, questionCounts, onEdit, onPreview, onRun, on
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all"); // 'all' | 'full' | 'sectional'
+  const [examFilter, setExamFilter] = useState("all"); // 'all' | 'ssc_cgl' | 'gmat'
 
   const filtered = mocksIndex.filter((m) => {
     const matchesQuery =
@@ -1009,7 +1086,8 @@ function MockListView({ mocksIndex, questionCounts, onEdit, onPreview, onRun, on
       String(m.mockNumber).includes(query);
     const matchesStatus = statusFilter === "all" || m.status === statusFilter;
     const matchesType = typeFilter === "all" || getMockType(m) === typeFilter;
-    return matchesQuery && matchesStatus && matchesType;
+    const matchesExam = examFilter === "all" || getExamKey(m) === examFilter;
+    return matchesQuery && matchesStatus && matchesType && matchesExam;
   });
 
   return (
@@ -1042,6 +1120,16 @@ function MockListView({ mocksIndex, questionCounts, onEdit, onPreview, onRun, on
           <option value={MOCK_TYPES.FULL}>Full Mock</option>
           <option value={MOCK_TYPES.SECTIONAL}>Sectional Mock</option>
         </select>
+        <select
+          value={examFilter}
+          onChange={(e) => setExamFilter(e.target.value)}
+          className="text-sm border border-slate-200 rounded-md px-3 py-2"
+        >
+          <option value="all">All exams</option>
+          {EXAM_LIST.map((exam) => (
+            <option key={exam.key} value={exam.key}>{exam.label}</option>
+          ))}
+        </select>
       </div>
 
       {filtered.length === 0 ? (
@@ -1064,6 +1152,9 @@ function MockListView({ mocksIndex, questionCounts, onEdit, onPreview, onRun, on
                         MOCK {String(m.mockNumber).padStart(2, "0")}
                         <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${getMockType(m) === MOCK_TYPES.SECTIONAL ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>
                           {mockTypeBadgeLabel(m)}
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-600">
+                          {getExam(m).label}
                         </span>
                       </div>
                       <div className="font-semibold text-slate-800">{m.title}</div>
@@ -1127,6 +1218,24 @@ function MockEditorView({ mock, questions, onSaveMeta, onOpenSection, onTogglePu
     onDirtyChange(true);
   }
 
+  // Switching exam changes what sections even exist, so the previously
+  // selected section almost never applies to the new exam — reset it rather
+  // than leaving a stale, invalid sectionalKey around. Also snaps negative
+  // marking to the new exam's default (0 for exams that don't use it, like
+  // GMAT) since that's not something an admin should have to remember to
+  // change by hand every time.
+  function updateExam(examKey) {
+    const exam = EXAMS[examKey];
+    setForm((f) => ({
+      ...f,
+      exam: examKey,
+      sectionalKey: null,
+      negativeMarking: exam.hasNegativeMarking ? exam.defaultNegativeMarking : 0,
+    }));
+    setSaved(false);
+    onDirtyChange(true);
+  }
+
   function handleSave() {
     onSaveMeta(form);
     setSaved(true);
@@ -1147,6 +1256,9 @@ function MockEditorView({ mock, questions, onSaveMeta, onOpenSection, onTogglePu
   }
 
   const formType = form.mockType === MOCK_TYPES.SECTIONAL ? MOCK_TYPES.SECTIONAL : MOCK_TYPES.FULL;
+  const formExamKey = getExamKey(form);
+  const examConfig = EXAMS[formExamKey];
+  const sectionMaxCount = examConfig.sections.find((s) => s.key === form.sectionalKey)?.questionCount || examConfig.sections[0]?.questionCount || 25;
   const applicableSections = sectionsForMock(form);
   const totalQs = applicableSections.reduce((sum, s) => sum + (questions[s.key]?.length || 0), 0);
   const totalRequired = applicableSections.reduce((sum, s) => sum + requiredCountFor(form, s.key), 0);
@@ -1154,7 +1266,7 @@ function MockEditorView({ mock, questions, onSaveMeta, onOpenSection, onTogglePu
   // Existing questions living in sections the current form selection would
   // no longer use — surfaced as a warning, never auto-deleted. The admin
   // must explicitly manage/clear those in Section Manager themselves.
-  const orphanedCounts = SECTIONS.filter((s) => !applicableSections.some((a) => a.key === s.key))
+  const orphanedCounts = ALL_SECTIONS.filter((s) => !applicableSections.some((a) => a.key === s.key))
     .map((s) => ({ label: s.label, count: (questions[s.key] || []).length }))
     .filter((s) => s.count > 0);
 
@@ -1177,6 +1289,22 @@ function MockEditorView({ mock, questions, onSaveMeta, onOpenSection, onTogglePu
           <div className="col-span-2">
             <label className="block text-xs font-medium text-slate-500 mb-1">Title</label>
             <input value={form.title} onChange={(e) => update("title", e.target.value)} className="w-full text-sm border border-slate-200 rounded-md px-3 py-2" />
+          </div>
+
+          <div className="col-span-2">
+            <label className="block text-xs font-medium text-slate-500 mb-1">Exam</label>
+            <div className="flex gap-1.5">
+              {EXAM_LIST.map((exam) => (
+                <button
+                  key={exam.key}
+                  type="button"
+                  onClick={() => updateExam(exam.key)}
+                  className={`text-xs px-3 py-1.5 rounded-md border ${formExamKey === exam.key ? "bg-blue-900 text-white border-blue-900" : "bg-white text-slate-500 border-slate-200"}`}
+                >
+                  {exam.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="col-span-2">
@@ -1209,19 +1337,19 @@ function MockEditorView({ mock, questions, onSaveMeta, onOpenSection, onTogglePu
                   className="w-full text-sm border border-slate-200 rounded-md px-3 py-2"
                 >
                   <option value="" disabled>Select a section...</option>
-                  {SECTIONS.map((s) => (
+                  {examConfig.sections.map((s) => (
                     <option key={s.key} value={s.key}>{s.label}</option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Question count (max {REQUIRED_PER_SECTION})</label>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Question count (max {sectionMaxCount})</label>
                 <input
                   type="number"
                   min={1}
-                  max={REQUIRED_PER_SECTION}
-                  value={form.sectionalQuestionCount || REQUIRED_PER_SECTION}
-                  onChange={(e) => update("sectionalQuestionCount", Math.max(1, Math.min(REQUIRED_PER_SECTION, Number(e.target.value) || 1)))}
+                  max={sectionMaxCount}
+                  value={form.sectionalQuestionCount || sectionMaxCount}
+                  onChange={(e) => update("sectionalQuestionCount", Math.max(1, Math.min(sectionMaxCount, Number(e.target.value) || 1)))}
                   className="w-full text-sm border border-slate-200 rounded-md px-3 py-2"
                 />
               </div>
@@ -1242,7 +1370,13 @@ function MockEditorView({ mock, questions, onSaveMeta, onOpenSection, onTogglePu
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-500 mb-1">Negative marking</label>
-            <input type="number" step="0.25" value={form.negativeMarking} onChange={(e) => update("negativeMarking", Number(e.target.value))} className="w-full text-sm border border-slate-200 rounded-md px-3 py-2" />
+            {examConfig.hasNegativeMarking ? (
+              <input type="number" step="0.25" value={form.negativeMarking} onChange={(e) => update("negativeMarking", Number(e.target.value))} className="w-full text-sm border border-slate-200 rounded-md px-3 py-2" />
+            ) : (
+              <div className="w-full text-sm border border-slate-100 bg-slate-50 text-slate-400 rounded-md px-3 py-2">
+                None — {examConfig.label} doesn't use negative marking
+              </div>
+            )}
           </div>
           <div className="col-span-2">
             <label className="block text-xs font-medium text-slate-500 mb-1">Description</label>
@@ -1435,7 +1569,7 @@ function SectionManager({ mockId, mock, sectionKey, questions, onQuestionsChange
     // (sectionsForMock only ever writes into sectionalKey), so this
     // naturally stays an empty set for sectional mocks — nothing extra
     // needed to keep a sectional mock's questions isolated to its section.
-    return new Set(SECTIONS.filter((s) => s.key !== sectionKey).flatMap((s) => (questions[s.key] || []).map((q) => q.id)));
+    return new Set(ALL_SECTIONS.filter((s) => s.key !== sectionKey).flatMap((s) => (questions[s.key] || []).map((q) => q.id)));
   }
 
   function handleValidate() {
@@ -1445,7 +1579,9 @@ function SectionManager({ mockId, mock, sectionKey, questions, onQuestionsChange
     // section. In "add" mode, an id matching one already in this section is
     // an update-in-place, not a duplicate — see validateImportJSON.
     const idsInThisSection = importMode === "replace" ? new Set() : new Set(list.map((q) => q.id));
-    return validateImportJSON(jsonText, sectionKey, idsInThisSection, existingIdsExcludingThisSection(), baseCount, requiredCount);
+    return validateImportJSON(
+      jsonText, sectionKey, idsInThisSection, existingIdsExcludingThisSection(), baseCount, requiredCount, getExam(mock).sections
+    );
   }
 
   function doImport() {
@@ -1875,7 +2011,7 @@ function PreviewView({ mock, questions }) {
 // otherwise it just downloads, and the card is visible on screen either way
 // so a plain screenshot always works as a fallback.
 // ============================================================================
-function ShareResultCard({ mock, score, totalMarks }) {
+function ShareResultCard({ mock, score, totalMarks, examLabel }) {
   const canvasRef = useRef(null);
 
   useEffect(() => {
@@ -1900,7 +2036,7 @@ function ShareResultCard({ mock, score, totalMarks }) {
     ctx.fillText(`${score}/${totalMarks}`, W / 2, H * 0.47);
 
     ctx.font = "600 44px system-ui, sans-serif";
-    wrapCanvasText(ctx, "IN THE SSC CGL MOCK TEST BY THE 100 PERCENTILER", W / 2, H * 0.57, W * 0.82, 56);
+    wrapCanvasText(ctx, `IN THE ${examLabel.toUpperCase()} MOCK TEST BY THE 100 PERCENTILER`, W / 2, H * 0.57, W * 0.82, 56);
 
     ctx.font = "600 34px system-ui, sans-serif";
     ctx.fillStyle = "#bfdbfe";
@@ -1908,18 +2044,18 @@ function ShareResultCard({ mock, score, totalMarks }) {
 
     ctx.font = "400 26px system-ui, sans-serif";
     ctx.fillStyle = "#93c5fd";
-    wrapCanvasText(ctx, mock.title || "SSC CGL Mock Test", W / 2, H * 0.88, W * 0.82, 34);
+    wrapCanvasText(ctx, mock.title || `${examLabel} Mock Test`, W / 2, H * 0.88, W * 0.82, 34);
     ctx.fillText("@the100percentiler", W / 2, H * 0.95);
-  }, [score, totalMarks, mock.title]);
+  }, [score, totalMarks, mock.title, examLabel]);
 
   function shareOrDownload() {
     const canvas = canvasRef.current;
     canvas.toBlob(async (blob) => {
       if (!blob) return;
-      const file = new File([blob], "my-ssc-cgl-score.png", { type: "image/png" });
+      const file = new File([blob], "my-mock-score.png", { type: "image/png" });
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
-          await navigator.share({ files: [file], title: "SSC CGL Mock Test" });
+          await navigator.share({ files: [file], title: `${examLabel} Mock Test` });
           return;
         } catch {
           // user cancelled the share sheet — fall through to download
@@ -1928,7 +2064,7 @@ function ShareResultCard({ mock, score, totalMarks }) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "my-ssc-cgl-score.png";
+      a.download = "my-mock-score.png";
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -2119,6 +2255,12 @@ function RunMockView({ mock, questions, onExit, challengeId }) {
   // attempt-history save below — computed from answers/questions/sections,
   // which are always in scope regardless of `finished`.
   function computeResults() {
+    // Marks per correct answer isn't hardcoded to SSC CGL's "+2" scheme — it's
+    // derived from this mock's own total marks spread across its questions,
+    // so it works whether an exam awards 2 marks per question (SSC CGL) or 1
+    // (GMAT, which has no negative marking either).
+    const totalQuestionCount = sections.reduce((sum, s) => sum + (questions[s.key]?.length || 0), 0);
+    const marksPerCorrect = totalQuestionCount > 0 ? mock.totalMarks / totalQuestionCount : 1;
     let correct = 0, incorrect = 0, skipped = 0;
     const sectionBreakdown = sections.map((s) => {
       let sCorrect = 0, sIncorrect = 0, sSkipped = 0;
@@ -2131,9 +2273,9 @@ function RunMockView({ mock, questions, onExit, challengeId }) {
       correct += sCorrect;
       incorrect += sIncorrect;
       skipped += sSkipped;
-      return { label: s.label, correct: sCorrect, incorrect: sIncorrect, skipped: sSkipped, score: sCorrect * 2 - sIncorrect * mock.negativeMarking };
+      return { label: s.label, correct: sCorrect, incorrect: sIncorrect, skipped: sSkipped, score: sCorrect * marksPerCorrect - sIncorrect * mock.negativeMarking };
     });
-    const score = correct * 2 - incorrect * mock.negativeMarking;
+    const score = correct * marksPerCorrect - incorrect * mock.negativeMarking;
 
     // Topic-wise performance — groups by each question's tagged topic, or
     // falls back to its section label when no topic was set on it (so this
@@ -2200,9 +2342,10 @@ function RunMockView({ mock, questions, onExit, challengeId }) {
       }
     })();
     // Cutoff comparison only makes sense on the same 200-mark scale as the
-    // real exam, so only Full Mocks show it — and only once you've entered
-    // at least one year in admin.
-    if (getMockType(mock) === MOCK_TYPES.FULL) {
+    // real SSC CGL exam, so only SSC CGL Full Mocks show it — and only once
+    // you've entered at least one year in admin. GMAT doesn't have an
+    // equivalent published "cutoff" concept, so it never shows this card.
+    if (getMockType(mock) === MOCK_TYPES.FULL && getExamKey(mock) === "ssc_cgl") {
       loadCutoffs()
         .then(setCutoffs)
         .catch(() => {});
@@ -2280,7 +2423,7 @@ function RunMockView({ mock, questions, onExit, challengeId }) {
         </div>
 
         <div className="max-w-md w-full mt-6">
-          <ShareResultCard mock={mock} score={score} totalMarks={mock.totalMarks} />
+          <ShareResultCard mock={mock} score={score} totalMarks={mock.totalMarks} examLabel={getExam(mock).label} />
         </div>
 
         {challengeId ? (
@@ -2522,7 +2665,7 @@ function RunMockView({ mock, questions, onExit, challengeId }) {
             rel="noopener noreferrer"
             className="block bg-gradient-to-r from-red-600 to-red-500 text-white rounded-2xl p-6 text-center hover:opacity-95 transition-opacity"
           >
-            <div className="text-sm font-semibold mb-1">Want to seriously prepare for SSC CGL?</div>
+            <div className="text-sm font-semibold mb-1">Want to seriously prepare for {getExam(mock).label}?</div>
             <div className="text-xs text-red-50 mb-3">
               Get free strategy sessions, topic breakdowns, and more mocks on our YouTube channel.
             </div>
@@ -2817,16 +2960,17 @@ function AdminPanel() {
     const newMock = {
       id: generateId("mock"),
       mockNumber: nextMockNumber(mocksIndex),
-      title: `SSC CGL Full Mock Test ${String(nextMockNumber(mocksIndex)).padStart(2, "0")}`,
+      title: `New Mock Test ${String(nextMockNumber(mocksIndex)).padStart(2, "0")}`,
       description: "",
       instructions: "",
-      duration: 60,
-      totalMarks: 200,
-      negativeMarking: 0.5,
+      duration: EXAMS[DEFAULT_EXAM].fullDuration,
+      totalMarks: EXAMS[DEFAULT_EXAM].fullTotalMarks,
+      negativeMarking: EXAMS[DEFAULT_EXAM].defaultNegativeMarking,
       status: "draft",
       mockType: MOCK_TYPES.FULL,
+      exam: DEFAULT_EXAM,
       sectionalKey: null,
-      sectionalQuestionCount: REQUIRED_PER_SECTION,
+      sectionalQuestionCount: EXAMS[DEFAULT_EXAM].sections[0].questionCount,
       videoUrl: null,
       createdAt: nowISO(),
       updatedAt: nowISO(),
@@ -2880,7 +3024,7 @@ function AdminPanel() {
       const safeMap = qMap && typeof qMap === "object" ? qMap : emptySectionMap();
       await saveMockQuestions(finalId, safeMap);
       newCacheEntries[finalId] = safeMap;
-      importedQuestionCount += SECTIONS.reduce((sum, s) => sum + (safeMap[s.key]?.length || 0), 0);
+      importedQuestionCount += ALL_SECTIONS.reduce((sum, s) => sum + (safeMap[s.key]?.length || 0), 0);
     }
     setQuestionsCache((c) => ({ ...c, ...newCacheEntries }));
 
@@ -2925,7 +3069,7 @@ function AdminPanel() {
     // question manager itself only ever writes into sectionalKey, but it's
     // checked explicitly here as a hard publish gate regardless of cause.
     if (getMockType(mock) === MOCK_TYPES.SECTIONAL) {
-      const strayCount = SECTIONS.filter((s) => s.key !== mock.sectionalKey).reduce((sum, s) => sum + (qMap[s.key]?.length || 0), 0);
+      const strayCount = ALL_SECTIONS.filter((s) => s.key !== mock.sectionalKey).reduce((sum, s) => sum + (qMap[s.key]?.length || 0), 0);
       if (strayCount > 0) {
         showToast(`Cannot publish — this sectional mock has ${strayCount} question(s) sitting in other sections. Clear them from the question manager first.`, "error");
         return;
@@ -2940,7 +3084,7 @@ function AdminPanel() {
   async function duplicateMock(mock) {
     const original = questionsCache[mock.id] || (await loadMockQuestions(mock.id));
     const clonedQuestions = {};
-    for (const s of SECTIONS) clonedQuestions[s.key] = (original[s.key] || []).map((q) => ({ ...q, id: generateId("q") }));
+    for (const s of ALL_SECTIONS) clonedQuestions[s.key] = (original[s.key] || []).map((q) => ({ ...q, id: generateId("q") }));
 
     const newMock = {
       ...mock,
@@ -2984,7 +3128,7 @@ function AdminPanel() {
   // question counts for dashboard + list, computed from whatever's cached
   const questionCounts = {};
   for (const [mockId, qmap] of Object.entries(questionsCache)) {
-    const total = SECTIONS.reduce((sum, s) => sum + (qmap[s.key]?.length || 0), 0);
+    const total = ALL_SECTIONS.reduce((sum, s) => sum + (qmap[s.key]?.length || 0), 0);
     questionCounts[mockId] = qmap;
     questionCounts[`${mockId}:total`] = total;
   }
@@ -3016,7 +3160,7 @@ function AdminPanel() {
   return (
     <div className="min-h-screen bg-slate-50 flex text-slate-800">
       <aside className="w-56 bg-slate-900 text-slate-300 flex flex-col shrink-0">
-        <div className="px-4 py-5 text-white font-semibold text-sm border-b border-slate-800">SSC CGL Admin</div>
+        <div className="px-4 py-5 text-white font-semibold text-sm border-b border-slate-800">The 100 Percentiler — Admin</div>
         <nav className="flex-1 py-3">
           {NAV.map((n) => (
             <button
@@ -3244,7 +3388,7 @@ function StudentInstructionsView({ mock, questionCount, onStart, onBack, viaChal
             <ul className="list-disc pl-5 space-y-1 text-slate-500">
               <li>Each section has its own timer. Once time is up, you'll automatically move to the next section.</li>
               <li>Once you leave a section, you cannot return to it.</li>
-              <li>Negative marking: {mock.negativeMarking} mark(s) deducted per wrong answer.</li>
+              <li>{mock.negativeMarking > 0 ? `Negative marking: ${mock.negativeMarking} mark(s) deducted per wrong answer.` : "No negative marking — attempt every question."}</li>
               <li>You can finish the test at any time using "Finish Test".</li>
             </ul>
           )}
@@ -3258,8 +3402,9 @@ function StudentInstructionsView({ mock, questionCount, onStart, onBack, viaChal
   );
 }
 
-function TypeSelectCard({ type, count, onSelect }) {
+function TypeSelectCard({ type, count, onSelect, exam }) {
   const isSectional = type === MOCK_TYPES.SECTIONAL;
+  const sectionNames = exam.sections.map((s) => s.label).join(", ");
   return (
     <button
       onClick={() => onSelect(type)}
@@ -3271,8 +3416,8 @@ function TypeSelectCard({ type, count, onSelect }) {
       <h2 className="text-lg font-semibold text-slate-800 mb-1">{isSectional ? "Sectional Mock" : "Full Mock"}</h2>
       <p className="text-sm text-slate-500 mb-4">
         {isSectional
-          ? "Practice one section at a time — Reasoning, GA, Quant, or English — at your own configured length."
-          : "The complete SSC CGL Tier-I paper — all four sections, 100 questions, 60 minutes."}
+          ? `Practice one section at a time — ${sectionNames} — at your own configured length.`
+          : `The complete ${exam.label} paper — ${sectionNames}, all in one sitting.`}
       </p>
       <span className="text-sm font-medium text-blue-800">{count} test{count === 1 ? "" : "s"} available →</span>
     </button>
@@ -3515,7 +3660,8 @@ function WeakTopicPracticeView({ topics, onExit }) {
 function StudentApp() {
   const [mocksIndex, setMocksIndex] = useState([]);
   const [loaded, setLoaded] = useState(false);
-  const [view, setView] = useState("type"); // 'type' | 'list' | 'instructions' | 'run'
+  const [view, setView] = useState("exam"); // 'exam' | 'type' | 'list' | 'instructions' | 'run'
+  const [examFilter, setExamFilter] = useState(null); // 'ssc_cgl' | 'gmat'
   const [typeFilter, setTypeFilter] = useState(null); // MOCK_TYPES.FULL | MOCK_TYPES.SECTIONAL
   const [selectedMock, setSelectedMock] = useState(null);
   const [selectedQuestions, setSelectedQuestions] = useState(null);
@@ -3538,27 +3684,37 @@ function StudentApp() {
   // While sitting on a browsing screen, re-check every few seconds so an
   // admin publishing/unpublishing elsewhere reflects promptly.
   useEffect(() => {
-    if (view !== "type" && view !== "list") return;
+    if (view !== "exam" && view !== "type" && view !== "list") return;
     const id = setInterval(refreshMocks, 4000);
     return () => clearInterval(id);
   }, [view, refreshMocks]);
 
   const publishedMocks = mocksIndex.filter((m) => m.status === "published");
-  const fullCount = publishedMocks.filter((m) => getMockType(m) === MOCK_TYPES.FULL).length;
-  const sectionalCount = publishedMocks.filter((m) => getMockType(m) === MOCK_TYPES.SECTIONAL).length;
-  const listForType = (typeFilter === "all" ? publishedMocks : publishedMocks.filter((m) => getMockType(m) === typeFilter)).sort(
-    (a, b) => a.mockNumber - b.mockNumber
-  );
+  // Every mock created before multi-exam support has no `exam` field and is
+  // treated as SSC CGL (see getExamKey) — same rule applies here so old
+  // mocks keep showing up exactly where they always did.
+  const publishedMocksInExam = examFilter ? publishedMocks.filter((m) => getExamKey(m) === examFilter) : [];
+  const fullCount = publishedMocksInExam.filter((m) => getMockType(m) === MOCK_TYPES.FULL).length;
+  const sectionalCount = publishedMocksInExam.filter((m) => getMockType(m) === MOCK_TYPES.SECTIONAL).length;
+  const listForType = (
+    typeFilter === "all" ? publishedMocksInExam : publishedMocksInExam.filter((m) => getMockType(m) === typeFilter)
+  ).sort((a, b) => a.mockNumber - b.mockNumber);
+
+  function chooseExam(examKey) {
+    setExamFilter(examKey);
+    setView("type");
+  }
 
   function chooseType(type) {
     setTypeFilter(type);
     setView("list");
   }
 
-  // "Challenge a friend" from the home page — any published mock works, so
-  // this reuses the same list+instructions+run flow untouched; the only
-  // difference is no type filter, and the existing "Create Challenge Link"
-  // button already appears on the results screen once they finish it.
+  // "Challenge a friend" from the home page — any published mock in this
+  // exam works, so this reuses the same list+instructions+run flow
+  // untouched; the only difference is no type filter, and the existing
+  // "Create Challenge Link" button already appears on the results screen
+  // once they finish it.
   function chooseChallenge() {
     setTypeFilter("all");
     setView("list");
@@ -3567,6 +3723,13 @@ function StudentApp() {
   function backToType() {
     setTypeFilter(null);
     setView("type");
+    refreshMocks();
+  }
+
+  function backToExam() {
+    setExamFilter(null);
+    setTypeFilter(null);
+    setView("exam");
     refreshMocks();
   }
 
@@ -3640,13 +3803,45 @@ function StudentApp() {
     );
   }
 
+  if (view === "exam") {
+    return (
+      <div className="min-h-screen bg-slate-50">
+        <header className="bg-white border-b border-slate-200 px-6 py-4">
+          <h1 className="text-base font-semibold text-slate-800">The 100 Percentiler — Mock Tests</h1>
+          <p className="text-xs text-slate-400">{publishedMocks.length} test{publishedMocks.length === 1 ? "" : "s"} available</p>
+        </header>
+        <main className="p-6 max-w-3xl mx-auto">
+          <p className="text-sm text-slate-500 mb-5">Which exam are you preparing for?</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {EXAM_LIST.map((exam) => {
+              const count = publishedMocks.filter((m) => getExamKey(m) === exam.key).length;
+              return (
+                <button
+                  key={exam.key}
+                  onClick={() => chooseExam(exam.key)}
+                  className="bg-white border border-slate-200 rounded-2xl p-8 text-left hover:border-blue-300 hover:shadow-sm transition-all"
+                >
+                  <h2 className="text-lg font-semibold text-slate-800 mb-1">{exam.label}</h2>
+                  <p className="text-sm text-slate-500 mb-4">{exam.tagline}</p>
+                  <span className="text-sm font-medium text-blue-800">{count} test{count === 1 ? "" : "s"} available →</span>
+                </button>
+              );
+            })}
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   if (view === "type") {
+    const exam = EXAMS[examFilter] || EXAMS[DEFAULT_EXAM];
     return (
       <div className="min-h-screen bg-slate-50">
         <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
           <div>
-            <h1 className="text-base font-semibold text-slate-800">SSC CGL Mock Tests</h1>
-            <p className="text-xs text-slate-400">{publishedMocks.length} test{publishedMocks.length === 1 ? "" : "s"} available</p>
+            <button onClick={backToExam} className="text-sm text-slate-500 mb-1">← Back to exams</button>
+            <h1 className="text-base font-semibold text-slate-800">{exam.label} Mock Tests</h1>
+            <p className="text-xs text-slate-400">{publishedMocksInExam.length} test{publishedMocksInExam.length === 1 ? "" : "s"} available</p>
           </div>
           <button onClick={openProgress} className="flex items-center gap-1.5 text-xs font-medium text-blue-700 border border-blue-200 bg-blue-50 px-3 py-1.5 rounded-full">
             <TrendingUp size={13} /> My Progress
@@ -3655,8 +3850,8 @@ function StudentApp() {
         <main className="p-6 max-w-3xl mx-auto">
           <p className="text-sm text-slate-500 mb-5">What would you like to practice?</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-            <TypeSelectCard type={MOCK_TYPES.FULL} count={fullCount} onSelect={chooseType} />
-            <TypeSelectCard type={MOCK_TYPES.SECTIONAL} count={sectionalCount} onSelect={chooseType} />
+            <TypeSelectCard type={MOCK_TYPES.FULL} count={fullCount} onSelect={chooseType} exam={exam} />
+            <TypeSelectCard type={MOCK_TYPES.SECTIONAL} count={sectionalCount} onSelect={chooseType} exam={exam} />
           </div>
 
           <button
@@ -4024,7 +4219,7 @@ function ChallengeFlow({ code }) {
           This challenge link doesn't exist, or the mock it was for isn't available anymore.
           <div className="mt-4">
             <a href="/" className="text-sm px-4 py-2 rounded-md border border-slate-200 text-slate-600 inline-block">
-              Go to SSC CGL Mock Tests
+              Go to Mock Tests
             </a>
           </div>
         </div>
@@ -4039,7 +4234,7 @@ function ChallengeFlow({ code }) {
           Someone already accepted this challenge. Ask your friend to send you a fresh one if you want to compete too.
           <div className="mt-4">
             <a href="/" className="text-sm px-4 py-2 rounded-md border border-slate-200 text-slate-600 inline-block">
-              Go to SSC CGL Mock Tests
+              Go to Mock Tests
             </a>
           </div>
         </div>

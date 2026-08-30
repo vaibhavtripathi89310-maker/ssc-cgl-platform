@@ -10,7 +10,14 @@ import { supabase } from "./supabaseClient";
 // present, delete whatever's no longer there.
 // ============================================================================
 
-const SECTION_KEYS = ["gi_reasoning", "general_awareness", "quant_aptitude", "english_comprehension"];
+// Union of every exam's section keys — loadMockQuestions groups rows by
+// whatever section_key is actually on them regardless of this list, so this
+// only needs to be a safe default shape, not an exhaustive source of truth
+// (see EXAMS in App.jsx for that).
+const SECTION_KEYS = [
+  "gi_reasoning", "general_awareness", "quant_aptitude", "english_comprehension",
+  "quant", "verbal", "data_insights",
+];
 const emptySectionMap = () => Object.fromEntries(SECTION_KEYS.map((k) => [k, []]));
 
 function mockToRow(m) {
@@ -25,6 +32,7 @@ function mockToRow(m) {
     negative_marking: m.negativeMarking,
     status: m.status,
     mock_type: m.mockType,
+    exam: m.exam || "ssc_cgl",
     sectional_key: m.sectionalKey ?? null,
     sectional_question_count: m.sectionalQuestionCount ?? null,
     video_url: m.videoUrl ?? null,
@@ -45,6 +53,7 @@ function rowToMock(r) {
     negativeMarking: r.negative_marking,
     status: r.status,
     mockType: r.mock_type,
+    exam: r.exam || "ssc_cgl",
     sectionalKey: r.sectional_key,
     sectionalQuestionCount: r.sectional_question_count,
     videoUrl: r.video_url ?? null,
