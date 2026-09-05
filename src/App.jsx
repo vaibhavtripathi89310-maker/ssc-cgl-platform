@@ -2125,6 +2125,12 @@ function RunMockView({ mock, questions, onExit, challengeId }) {
   const [toast, setToast] = useState("");
   const [confirmAction, setConfirmAction] = useState(null); // 'next-section' | 'finish' | null
   const [timeSpent, setTimeSpent] = useState({}); // questionId -> seconds spent on it
+  const [reviewFilter, setReviewFilter] = useState("all"); // 'all' | 'correct' | 'incorrect' | 'skipped'
+  const reviewSectionRef = useRef(null);
+  function jumpToReview(filter) {
+    setReviewFilter(filter);
+    reviewSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   const section = sections[sectionIdx];
   const list = section ? questions[section.key] || [] : [];
@@ -2394,9 +2400,18 @@ function RunMockView({ mock, questions, onExit, challengeId }) {
           <h2 className="text-xl font-semibold text-slate-800 mb-1">Test submitted</h2>
           <p className="text-sm text-slate-500 mb-6">{mock.title}</p>
           <div className="grid grid-cols-3 gap-3 text-sm mb-6">
-            <div><div className="text-2xl font-semibold text-emerald-600">{correct}</div><div className="text-xs text-slate-400">Correct</div></div>
-            <div><div className="text-2xl font-semibold text-red-500">{incorrect}</div><div className="text-xs text-slate-400">Incorrect</div></div>
-            <div><div className="text-2xl font-semibold text-slate-400">{skipped}</div><div className="text-xs text-slate-400">Skipped</div></div>
+            <button onClick={() => correct > 0 && jumpToReview("correct")} disabled={correct === 0} className="disabled:cursor-default">
+              <div className="text-2xl font-semibold text-emerald-600">{correct}</div>
+              <div className={`text-xs text-slate-400 ${correct > 0 ? "underline decoration-dotted underline-offset-2" : ""}`}>Correct</div>
+            </button>
+            <button onClick={() => incorrect > 0 && jumpToReview("incorrect")} disabled={incorrect === 0} className="disabled:cursor-default">
+              <div className="text-2xl font-semibold text-red-500">{incorrect}</div>
+              <div className={`text-xs text-slate-400 ${incorrect > 0 ? "underline decoration-dotted underline-offset-2" : ""}`}>Incorrect</div>
+            </button>
+            <button onClick={() => skipped > 0 && jumpToReview("skipped")} disabled={skipped === 0} className="disabled:cursor-default">
+              <div className="text-2xl font-semibold text-slate-400">{skipped}</div>
+              <div className={`text-xs text-slate-400 ${skipped > 0 ? "underline decoration-dotted underline-offset-2" : ""}`}>Skipped</div>
+            </button>
           </div>
           <div className="text-3xl font-bold text-slate-800 mb-2">{score} <span className="text-lg font-normal text-slate-400">/ {mock.totalMarks}</span></div>
           {percentile !== null && (
@@ -2592,9 +2607,26 @@ function RunMockView({ mock, questions, onExit, challengeId }) {
             </div>
           </div>
 
-          <h3 className="text-sm font-semibold text-slate-700 px-1">Answer review</h3>
-          {sections.map((s) =>
-            (questions[s.key] || []).map((qq, i) => {
+          <div ref={reviewSectionRef} className="flex items-center justify-between px-1">
+            <h3 className="text-sm font-semibold text-slate-700">
+              Answer review{reviewFilter !== "all" ? ` — ${reviewFilter} only` : ""}
+            </h3>
+            {reviewFilter !== "all" && (
+              <button onClick={() => setReviewFilter("all")} className="text-xs text-blue-700 font-medium">
+                Show all →
+              </button>
+            )}
+          </div>
+          {sections
+            .flatMap((s) => (questions[s.key] || []).map((qq, i) => ({ s, qq, i })))
+            .filter(({ qq }) => {
+              const sel = answers[qq.id];
+              if (reviewFilter === "all") return true;
+              if (reviewFilter === "skipped") return sel === undefined;
+              if (reviewFilter === "correct") return sel === qq.answer;
+              return sel !== undefined && sel !== qq.answer; // 'incorrect'
+            })
+            .map(({ s, qq, i }) => {
               const sel = answers[qq.id];
               const isCorrect = sel === qq.answer;
               const isSkipped = sel === undefined;
@@ -2638,8 +2670,7 @@ function RunMockView({ mock, questions, onExit, challengeId }) {
                   )}
                 </div>
               );
-            })
-          )}
+            })}
         </div>
 
         <div className="max-w-2xl w-full mt-6 space-y-3">
@@ -3663,6 +3694,7 @@ function StudentApp() {
   const [view, setView] = useState("exam"); // 'exam' | 'type' | 'list' | 'instructions' | 'run'
   const [examFilter, setExamFilter] = useState(null); // 'ssc_cgl' | 'gmat'
   const [typeFilter, setTypeFilter] = useState(null); // MOCK_TYPES.FULL | MOCK_TYPES.SECTIONAL
+  const [sectionFilter, setSectionFilter] = useState(null); // one of the exam's section keys, sectional mocks only
   const [selectedMock, setSelectedMock] = useState(null);
   const [selectedQuestions, setSelectedQuestions] = useState(null);
   const [attempts, setAttempts] = useState([]);
@@ -3698,7 +3730,18 @@ function StudentApp() {
   const sectionalCount = publishedMocksInExam.filter((m) => getMockType(m) === MOCK_TYPES.SECTIONAL).length;
   const listForType = (
     typeFilter === "all" ? publishedMocksInExam : publishedMocksInExam.filter((m) => getMockType(m) === typeFilter)
-  ).sort((a, b) => a.mockNumber - b.mockNumber);
+  )
+    .filter((m) => !sectionFilter || m.sectionalKey === sectionFilter)
+    .sort((a, b) => a.mockNumber - b.mockNumber);
+  // Sectional mocks are grouped by section before showing the list — one
+  // more click, but "all sectional mocks of every section mixed together"
+  // stops being readable once there's more than a handful of them.
+  const sectionCounts = examFilter
+    ? EXAMS[examFilter].sections.map((s) => ({
+        ...s,
+        count: publishedMocksInExam.filter((m) => getMockType(m) === MOCK_TYPES.SECTIONAL && m.sectionalKey === s.key).length,
+      }))
+    : [];
 
   function chooseExam(examKey) {
     setExamFilter(examKey);
@@ -3707,7 +3750,12 @@ function StudentApp() {
 
   function chooseType(type) {
     setTypeFilter(type);
+    setSectionFilter(null);
     setView("list");
+  }
+
+  function chooseSection(sectionKey) {
+    setSectionFilter(sectionKey);
   }
 
   // "Challenge a friend" from the home page — any published mock in this
@@ -3717,12 +3765,21 @@ function StudentApp() {
   // once they finish it.
   function chooseChallenge() {
     setTypeFilter("all");
+    setSectionFilter(null);
     setView("list");
   }
 
   function backToType() {
     setTypeFilter(null);
+    setSectionFilter(null);
     setView("type");
+    refreshMocks();
+  }
+
+  // From a filtered sectional-mock list back to the "pick a section" step —
+  // distinct from backToType, which exits the sectional flow entirely.
+  function backToSectionPicker() {
+    setSectionFilter(null);
     refreshMocks();
   }
 
@@ -3879,13 +3936,53 @@ function StudentApp() {
     );
   }
 
-  // view === 'list' — only mocks of the chosen type
+  // Sectional Mock, section not chosen yet — pick a section first, so the
+  // list a student sees is only ever one section's mocks, not every
+  // section's mocks mixed together.
+  if (typeFilter === MOCK_TYPES.SECTIONAL && !sectionFilter) {
+    return (
+      <div className="min-h-screen bg-slate-50">
+        <header className="bg-white border-b border-slate-200 px-6 py-4">
+          <button onClick={backToType} className="text-sm text-slate-500 mb-2">← Back</button>
+          <h1 className="text-base font-semibold text-slate-800">Sectional Mocks</h1>
+          <p className="text-xs text-slate-400">Pick a section</p>
+        </header>
+        <main className="p-6 max-w-3xl mx-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {sectionCounts.map((s) => (
+              <button
+                key={s.key}
+                onClick={() => chooseSection(s.key)}
+                disabled={s.count === 0}
+                className="bg-white border border-slate-200 rounded-2xl p-6 text-left hover:border-blue-300 hover:shadow-sm transition-all disabled:opacity-40 disabled:hover:border-slate-200 disabled:hover:shadow-none"
+              >
+                <h2 className="text-base font-semibold text-slate-800 mb-1">{s.label}</h2>
+                <span className="text-sm font-medium text-blue-800">{s.count} test{s.count === 1 ? "" : "s"} available →</span>
+              </button>
+            ))}
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // view === 'list' — only mocks of the chosen type (and, for Sectional, the
+  // chosen section)
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="bg-white border-b border-slate-200 px-6 py-4">
-        <button onClick={backToType} className="text-sm text-slate-500 mb-2">← Back</button>
+        <button
+          onClick={typeFilter === MOCK_TYPES.SECTIONAL ? backToSectionPicker : backToType}
+          className="text-sm text-slate-500 mb-2"
+        >
+          ← Back
+        </button>
         <h1 className="text-base font-semibold text-slate-800">
-          {typeFilter === "all" ? "Pick a mock to challenge a friend" : typeFilter === MOCK_TYPES.SECTIONAL ? "Sectional Mocks" : "Full Mocks"}
+          {typeFilter === "all"
+            ? "Pick a mock to challenge a friend"
+            : typeFilter === MOCK_TYPES.SECTIONAL
+            ? `Sectional Mocks — ${sectionLabel(sectionFilter)}`
+            : "Full Mocks"}
         </h1>
         <p className="text-xs text-slate-400">{listForType.length} test{listForType.length === 1 ? "" : "s"} available</p>
       </header>
