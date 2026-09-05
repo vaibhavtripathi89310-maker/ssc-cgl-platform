@@ -2115,7 +2115,7 @@ function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight) {
 // questions. Distinct from PreviewView: no answers shown, real countdown per
 // section, auto-advances when time is up, gives a score at the end.
 // ============================================================================
-function RunMockView({ mock, questions, onExit, challengeId }) {
+function RunMockView({ mock, questions, onExit, challengeId, mocksIndex = [] }) {
   const [sectionIdx, setSectionIdx] = useState(0);
   const [qIdx, setQIdx] = useState(0);
   const [answers, setAnswers] = useState({}); // questionId -> optionIndex
@@ -2316,6 +2316,7 @@ function RunMockView({ mock, questions, onExit, challengeId }) {
   const [leaderboard, setLeaderboard] = useState([]);
   const [myAttemptId, setMyAttemptId] = useState(null);
   const [cutoffs, setCutoffs] = useState([]);
+  const [examAttempts, setExamAttempts] = useState([]); // this device's attempts, filtered to this mock's exam
   const [challengeClaim, setChallengeClaim] = useState(null); // 'claimed' | 'taken' | null (only relevant when challengeId prop is set)
   const [myChallengeLink, setMyChallengeLink] = useState(null); // set after creating a NEW challenge from a solo attempt
   useEffect(() => {
@@ -2347,6 +2348,17 @@ function RunMockView({ mock, questions, onExit, challengeId }) {
           const claimed = await claimOpponentSlot(challengeId, attemptId);
           setChallengeClaim(claimed ? "claimed" : "taken");
         }
+      } catch {
+        // Non-critical — the results screen works fine without this.
+      }
+      // "Your {exam} performance" panel below — this device's history
+      // within just this mock's exam (so a GMAT attempt never mixes SSC CGL
+      // numbers in, or vice versa). Fetched after saveAttempt so the attempt
+      // just taken is already included.
+      try {
+        const deviceAttempts = await loadDeviceAttempts(getDeviceId());
+        const examKey = getExamKey(mock);
+        setExamAttempts(deviceAttempts.filter((a) => getExamKey(mocksIndex.find((m) => m.id === a.mockId)) === examKey));
       } catch {
         // Non-critical — the results screen works fine without this.
       }
@@ -2547,6 +2559,13 @@ function RunMockView({ mock, questions, onExit, challengeId }) {
                 );
               })}
             </div>
+          </div>
+        )}
+
+        {examAttempts.length > 0 && (
+          <div className="max-w-2xl w-full mt-6">
+            <h3 className="text-sm font-semibold text-slate-700 px-1 mb-3">Your {getExam(mock).label} performance</h3>
+            <ExamPerformancePanel attempts={examAttempts} mocksIndex={mocksIndex} />
           </div>
         )}
 
@@ -3287,7 +3306,7 @@ function AdminPanel() {
             <PreviewView mock={activeMock} questions={activeQuestions} />
           )}
           {view === "run" && activeMock && activeQuestions && (
-            <RunMockView mock={activeMock} questions={activeQuestions} onExit={goList} />
+            <RunMockView mock={activeMock} questions={activeQuestions} onExit={goList} mocksIndex={mocksIndex} />
           )}
         </main>
       </div>
@@ -3589,40 +3608,22 @@ function AnswerBreakdownDonut({ attempts }) {
   );
 }
 
-function ProgressView({ attempts, mocksIndex, onBack, onPractice }) {
-  const streak = computeStreak(attempts);
-  const topicAgg = {};
-  attempts.forEach((a) => {
-    (a.topicBreakdown || []).forEach((t) => {
-      if (!topicAgg[t.topic]) topicAgg[t.topic] = { correct: 0, total: 0 };
-      topicAgg[t.topic].correct += t.correct;
-      topicAgg[t.topic].total += t.total;
-    });
-  });
-  const weakTopics = Object.entries(topicAgg)
-    .map(([topic, v]) => ({ topic, ...v, accuracy: v.correct / v.total }))
-    .filter((t) => t.accuracy < 0.4)
-    .sort((a, b) => a.accuracy - b.accuracy)
-    .map((t) => t.topic);
-
-  const last8 = attempts.slice(-8);
-  const avgScorePct = last8.length
-    ? Math.round(last8.reduce((sum, a) => sum + scorePercentFor(a, mocksIndex, accuracyPercentFor(a)), 0) / last8.length)
-    : null;
-  const avgAccuracyPct = last8.length ? Math.round(last8.reduce((sum, a) => sum + accuracyPercentFor(a), 0) / last8.length) : null;
-
-  // Subject-wise accuracy and the "silly mistakes" heuristic both need the
-  // real question list (correct answer + which section each question
-  // belongs to) for every mock this device has attempted — not something
-  // the attempt rows carry themselves, so this is a one-time fetch per
-  // distinct mock, mirroring the same pattern Analytics uses for "toughest
-  // questions".
+// Subject-wise accuracy and the "silly mistakes" heuristic both need the real
+// question list (correct answer + which section each question belongs to)
+// for every mock in `attempts` — not something the attempt rows carry
+// themselves, so this is a one-time fetch per distinct mock, mirroring the
+// same pattern Analytics uses for "toughest questions". Shared by My
+// Progress (all attempts) and the results-screen exam performance panel
+// (attempts filtered to just this exam).
+function useSectionStats(attempts, mocksIndex) {
   const [sectionAccuracy, setSectionAccuracy] = useState([]);
   const [sillyMistakeCount, setSillyMistakeCount] = useState(0);
   const [statsLoading, setStatsLoading] = useState(true);
 
   useEffect(() => {
     if (attempts.length === 0) {
+      setSectionAccuracy([]);
+      setSillyMistakeCount(0);
       setStatsLoading(false);
       return;
     }
@@ -3687,6 +3688,82 @@ function ProgressView({ attempts, mocksIndex, onBack, onPractice }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attempts]);
 
+  return { sectionAccuracy, sillyMistakeCount, statsLoading };
+}
+
+// The stat-cards + trend chart + subject-accuracy/donut block — shared
+// between My Progress (all of this device's attempts) and the results
+// screen's "your performance in this exam" panel (attempts pre-filtered to
+// just the exam of the mock just taken). Renders nothing for zero attempts.
+function ExamPerformancePanel({ attempts, mocksIndex }) {
+  const last8 = attempts.slice(-8);
+  const avgScorePct = last8.length
+    ? Math.round(last8.reduce((sum, a) => sum + scorePercentFor(a, mocksIndex, accuracyPercentFor(a)), 0) / last8.length)
+    : null;
+  const avgAccuracyPct = last8.length ? Math.round(last8.reduce((sum, a) => sum + accuracyPercentFor(a), 0) / last8.length) : null;
+  const { sectionAccuracy, sillyMistakeCount, statsLoading } = useSectionStats(attempts, mocksIndex);
+
+  if (attempts.length === 0) return null;
+
+  return (
+    <>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+        <div className="bg-white border border-slate-200 rounded-lg p-4">
+          <div className="text-2xl font-semibold text-slate-800">{attempts.length}</div>
+          <div className="text-xs text-slate-500 mt-0.5">Tests taken</div>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-lg p-4">
+          <div className="text-2xl font-semibold text-slate-800">{avgScorePct === null ? "—" : `${avgScorePct}%`}</div>
+          <div className="text-xs text-slate-500 mt-0.5">Avg score (last {last8.length})</div>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-lg p-4">
+          <div className="text-2xl font-semibold text-slate-800">{avgAccuracyPct === null ? "—" : `${avgAccuracyPct}%`}</div>
+          <div className="text-xs text-slate-500 mt-0.5">Avg accuracy (last {last8.length})</div>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-lg p-4">
+          <div className="text-2xl font-semibold text-slate-800">{statsLoading ? "—" : sillyMistakeCount}</div>
+          <div className="text-xs text-slate-500 mt-0.5">Silly mistakes (est.)</div>
+        </div>
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-xl p-5 mb-4">
+        <h2 className="text-sm font-semibold text-slate-700 mb-3">Score &amp; accuracy trend</h2>
+        <ProgressTrendChart attempts={attempts} mocksIndex={mocksIndex} />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-5 gap-4 mb-4">
+        {!statsLoading && sectionAccuracy.length > 0 && (
+          <div className="sm:col-span-3 bg-white border border-slate-200 rounded-xl p-5">
+            <h2 className="text-sm font-semibold text-slate-700 mb-3">Subject-wise accuracy</h2>
+            <SubjectAccuracyChart sectionAccuracy={sectionAccuracy} />
+          </div>
+        )}
+        <div className={`bg-white border border-slate-200 rounded-xl p-5 ${sectionAccuracy.length > 0 ? "sm:col-span-2" : "sm:col-span-5"}`}>
+          <h2 className="text-sm font-semibold text-slate-700 mb-1">Correct vs. incorrect vs. skipped</h2>
+          <p className="text-xs text-slate-400 mb-2">Across every attempt on this device.</p>
+          <AnswerBreakdownDonut attempts={attempts} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+function ProgressView({ attempts, mocksIndex, onBack, onPractice }) {
+  const streak = computeStreak(attempts);
+  const topicAgg = {};
+  attempts.forEach((a) => {
+    (a.topicBreakdown || []).forEach((t) => {
+      if (!topicAgg[t.topic]) topicAgg[t.topic] = { correct: 0, total: 0 };
+      topicAgg[t.topic].correct += t.correct;
+      topicAgg[t.topic].total += t.total;
+    });
+  });
+  const weakTopics = Object.entries(topicAgg)
+    .map(([topic, v]) => ({ topic, ...v, accuracy: v.correct / v.total }))
+    .filter((t) => t.accuracy < 0.4)
+    .sort((a, b) => a.accuracy - b.accuracy)
+    .map((t) => t.topic);
+
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-start justify-between">
@@ -3711,43 +3788,7 @@ function ProgressView({ attempts, mocksIndex, onBack, onPractice }) {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-              <div className="bg-white border border-slate-200 rounded-lg p-4">
-                <div className="text-2xl font-semibold text-slate-800">{attempts.length}</div>
-                <div className="text-xs text-slate-500 mt-0.5">Tests taken</div>
-              </div>
-              <div className="bg-white border border-slate-200 rounded-lg p-4">
-                <div className="text-2xl font-semibold text-slate-800">{avgScorePct === null ? "—" : `${avgScorePct}%`}</div>
-                <div className="text-xs text-slate-500 mt-0.5">Avg score (last {last8.length})</div>
-              </div>
-              <div className="bg-white border border-slate-200 rounded-lg p-4">
-                <div className="text-2xl font-semibold text-slate-800">{avgAccuracyPct === null ? "—" : `${avgAccuracyPct}%`}</div>
-                <div className="text-xs text-slate-500 mt-0.5">Avg accuracy (last {last8.length})</div>
-              </div>
-              <div className="bg-white border border-slate-200 rounded-lg p-4">
-                <div className="text-2xl font-semibold text-slate-800">{statsLoading ? "—" : sillyMistakeCount}</div>
-                <div className="text-xs text-slate-500 mt-0.5">Silly mistakes (est.)</div>
-              </div>
-            </div>
-
-            <div className="bg-white border border-slate-200 rounded-xl p-5 mb-4">
-              <h2 className="text-sm font-semibold text-slate-700 mb-3">Score &amp; accuracy trend</h2>
-              <ProgressTrendChart attempts={attempts} mocksIndex={mocksIndex} />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-5 gap-4 mb-4">
-              {!statsLoading && sectionAccuracy.length > 0 && (
-                <div className="sm:col-span-3 bg-white border border-slate-200 rounded-xl p-5">
-                  <h2 className="text-sm font-semibold text-slate-700 mb-3">Subject-wise accuracy</h2>
-                  <SubjectAccuracyChart sectionAccuracy={sectionAccuracy} />
-                </div>
-              )}
-              <div className={`bg-white border border-slate-200 rounded-xl p-5 ${sectionAccuracy.length > 0 ? "sm:col-span-2" : "sm:col-span-5"}`}>
-                <h2 className="text-sm font-semibold text-slate-700 mb-1">Correct vs. incorrect vs. skipped</h2>
-                <p className="text-xs text-slate-400 mb-2">Across every attempt on this device.</p>
-                <AnswerBreakdownDonut attempts={attempts} />
-              </div>
-            </div>
+            <ExamPerformancePanel attempts={attempts} mocksIndex={mocksIndex} />
 
             {weakTopics.length > 0 && (
               <div className="bg-white border border-slate-200 rounded-xl p-5 mb-4">
@@ -4066,7 +4107,7 @@ function StudentApp() {
   if (view === "run" && selectedMock && selectedQuestions) {
     // The exact same RunMockView the Admin Panel's "Run Mock" button uses —
     // no second engine, no reimplementation of timer/scoring/palette logic.
-    return <RunMockView mock={selectedMock} questions={selectedQuestions} onExit={backToList} />;
+    return <RunMockView mock={selectedMock} questions={selectedQuestions} onExit={backToList} mocksIndex={mocksIndex} />;
   }
 
   if (view === "progress") {
@@ -4477,6 +4518,7 @@ function ChallengeFlow({ code }) {
   const [state, setState] = useState("loading");
   const [challenge, setChallenge] = useState(null);
   const [mock, setMock] = useState(null);
+  const [mocksIndex, setMocksIndex] = useState([]);
   const [questions, setQuestions] = useState(null);
   const [creatorAttempt, setCreatorAttempt] = useState(null);
   const [opponentAttempt, setOpponentAttempt] = useState(null);
@@ -4494,6 +4536,7 @@ function ChallengeFlow({ code }) {
     const [mocksIdx, cAttempt] = await Promise.all([loadMocksIndex(), loadAttemptById(ch.creatorAttemptId)]);
     const m = mocksIdx.find((mm) => mm.id === ch.mockId);
     setMock(m || null);
+    setMocksIndex(mocksIdx);
     setCreatorAttempt(cAttempt);
 
     let oAttempt = null;
@@ -4623,7 +4666,15 @@ function ChallengeFlow({ code }) {
   }
 
   if (state === "run") {
-    return <RunMockView mock={mock} questions={questions} onExit={() => (window.location.href = "/")} challengeId={code} />;
+    return (
+      <RunMockView
+        mock={mock}
+        questions={questions}
+        onExit={() => (window.location.href = "/")}
+        challengeId={code}
+        mocksIndex={mocksIndex}
+      />
+    );
   }
 
   if (state === "comparison") {
