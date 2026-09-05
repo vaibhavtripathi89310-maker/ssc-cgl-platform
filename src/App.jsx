@@ -2115,7 +2115,7 @@ function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight) {
 // questions. Distinct from PreviewView: no answers shown, real countdown per
 // section, auto-advances when time is up, gives a score at the end.
 // ============================================================================
-function RunMockView({ mock, questions, onExit, challengeId, mocksIndex = [] }) {
+function RunMockView({ mock, questions, onExit, challengeId }) {
   const [sectionIdx, setSectionIdx] = useState(0);
   const [qIdx, setQIdx] = useState(0);
   const [answers, setAnswers] = useState({}); // questionId -> optionIndex
@@ -2316,7 +2316,6 @@ function RunMockView({ mock, questions, onExit, challengeId, mocksIndex = [] }) 
   const [leaderboard, setLeaderboard] = useState([]);
   const [myAttemptId, setMyAttemptId] = useState(null);
   const [cutoffs, setCutoffs] = useState([]);
-  const [examAttempts, setExamAttempts] = useState([]); // this device's attempts, filtered to this mock's exam
   const [challengeClaim, setChallengeClaim] = useState(null); // 'claimed' | 'taken' | null (only relevant when challengeId prop is set)
   const [myChallengeLink, setMyChallengeLink] = useState(null); // set after creating a NEW challenge from a solo attempt
   useEffect(() => {
@@ -2351,17 +2350,6 @@ function RunMockView({ mock, questions, onExit, challengeId, mocksIndex = [] }) 
       } catch {
         // Non-critical — the results screen works fine without this.
       }
-      // "Your {exam} performance" panel below — this device's history
-      // within just this mock's exam (so a GMAT attempt never mixes SSC CGL
-      // numbers in, or vice versa). Fetched after saveAttempt so the attempt
-      // just taken is already included.
-      try {
-        const deviceAttempts = await loadDeviceAttempts(getDeviceId());
-        const examKey = getExamKey(mock);
-        setExamAttempts(deviceAttempts.filter((a) => getExamKey(mocksIndex.find((m) => m.id === a.mockId)) === examKey));
-      } catch {
-        // Non-critical — the results screen works fine without this.
-      }
     })();
     // Cutoff comparison only makes sense on the same 200-mark scale as the
     // real SSC CGL exam, so only SSC CGL Full Mocks show it — and only once
@@ -2388,11 +2376,6 @@ function RunMockView({ mock, questions, onExit, challengeId, mocksIndex = [] }) 
 
   if (finished) {
     const { correct, incorrect, skipped, sectionBreakdown, score, topicRows, weakTopics, strongTopics } = computeResults();
-    function topicBadge(accuracy) {
-      if (accuracy < 0.4) return { label: "Needs revision", cls: "bg-red-100 text-red-700" };
-      if (accuracy < 0.7) return { label: "Getting there", cls: "bg-amber-100 text-amber-700" };
-      return { label: "Strong", cls: "bg-emerald-100 text-emerald-700" };
-    }
 
     // Time analysis — colors each question relative to a "fair" pace (the
     // section's time budget split evenly across its questions), not a fixed
@@ -2562,13 +2545,6 @@ function RunMockView({ mock, questions, onExit, challengeId, mocksIndex = [] }) 
           </div>
         )}
 
-        {examAttempts.length > 0 && (
-          <div className="max-w-2xl w-full mt-6">
-            <h3 className="text-sm font-semibold text-slate-700 px-1 mb-3">Your {getExam(mock).label} performance</h3>
-            <ExamPerformancePanel attempts={examAttempts} mocksIndex={mocksIndex} />
-          </div>
-        )}
-
         <div className="max-w-2xl w-full mt-6 space-y-3">
           <div className="bg-white border border-slate-200 rounded-xl p-5 text-left">
             <h3 className="text-sm font-semibold text-slate-700 mb-1">Time analysis</h3>
@@ -2603,7 +2579,7 @@ function RunMockView({ mock, questions, onExit, challengeId, mocksIndex = [] }) 
 
           <div className="bg-white border border-slate-200 rounded-xl p-5 text-left">
             <h3 className="text-sm font-semibold text-slate-700 mb-1">Topic-wise performance</h3>
-            <p className="text-xs text-slate-400 mb-4">Where to focus your revision, based on this attempt.</p>
+            <p className="text-xs text-slate-400 mb-4">Where to focus your revision, based on this attempt — this mock only.</p>
             {weakTopics.length > 0 && (
               <div className="bg-red-50 border border-red-200 rounded-md px-3 py-2 text-xs text-red-700 mb-2">
                 📌 Focus your revision on: <span className="font-medium">{weakTopics.join(", ")}</span>
@@ -2614,19 +2590,15 @@ function RunMockView({ mock, questions, onExit, challengeId, mocksIndex = [] }) 
                 ✅ You're doing well in: <span className="font-medium">{strongTopics.join(", ")}</span>
               </div>
             )}
-            <div className="space-y-1.5">
-              {topicRows.map((t) => {
-                const badge = topicBadge(t.accuracy);
-                return (
-                  <div key={t.topic} className="flex items-center justify-between text-xs bg-slate-50 rounded-md px-3 py-2">
-                    <span className="text-slate-600">{t.topic}</span>
-                    <span className="flex items-center gap-2">
-                      <span className="text-slate-400">{t.correct}/{t.total}</span>
-                      <span className={`px-2 py-0.5 rounded-full font-medium ${badge.cls}`}>{badge.label}</span>
-                    </span>
-                  </div>
-                );
-              })}
+            <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
+              <div className="sm:col-span-3">
+                <SubjectAccuracyChart
+                  sectionAccuracy={topicRows.map((t) => ({ label: t.topic, correct: t.correct, total: t.total, accuracy: t.accuracy }))}
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <AnswerBreakdownDonut attempts={[{ correct, incorrect, skipped }]} caption="questions in this mock" />
+              </div>
             </div>
           </div>
 
@@ -3306,7 +3278,7 @@ function AdminPanel() {
             <PreviewView mock={activeMock} questions={activeQuestions} />
           )}
           {view === "run" && activeMock && activeQuestions && (
-            <RunMockView mock={activeMock} questions={activeQuestions} onExit={goList} mocksIndex={mocksIndex} />
+            <RunMockView mock={activeMock} questions={activeQuestions} onExit={goList} />
           )}
         </main>
       </div>
@@ -3575,7 +3547,7 @@ function SubjectAccuracyChart({ sectionAccuracy }) {
   );
 }
 
-function AnswerBreakdownDonut({ attempts }) {
+function AnswerBreakdownDonut({ attempts, caption = "questions answered across all attempts" }) {
   const totals = attempts.reduce(
     (acc, a) => ({ correct: acc.correct + a.correct, incorrect: acc.incorrect + a.incorrect, skipped: acc.skipped + a.skipped }),
     { correct: 0, incorrect: 0, skipped: 0 }
@@ -3603,7 +3575,7 @@ function AnswerBreakdownDonut({ attempts }) {
           <Legend verticalAlign="bottom" height={28} iconType="circle" wrapperStyle={{ fontSize: 12 }} />
         </PieChart>
       </ResponsiveContainer>
-      <p className="text-center text-xs text-slate-400 -mt-1">{grandTotal} questions answered across all attempts</p>
+      <p className="text-center text-xs text-slate-400 -mt-1">{grandTotal} {caption}</p>
     </div>
   );
 }
@@ -4107,7 +4079,7 @@ function StudentApp() {
   if (view === "run" && selectedMock && selectedQuestions) {
     // The exact same RunMockView the Admin Panel's "Run Mock" button uses —
     // no second engine, no reimplementation of timer/scoring/palette logic.
-    return <RunMockView mock={selectedMock} questions={selectedQuestions} onExit={backToList} mocksIndex={mocksIndex} />;
+    return <RunMockView mock={selectedMock} questions={selectedQuestions} onExit={backToList} />;
   }
 
   if (view === "progress") {
@@ -4518,7 +4490,6 @@ function ChallengeFlow({ code }) {
   const [state, setState] = useState("loading");
   const [challenge, setChallenge] = useState(null);
   const [mock, setMock] = useState(null);
-  const [mocksIndex, setMocksIndex] = useState([]);
   const [questions, setQuestions] = useState(null);
   const [creatorAttempt, setCreatorAttempt] = useState(null);
   const [opponentAttempt, setOpponentAttempt] = useState(null);
@@ -4536,7 +4507,6 @@ function ChallengeFlow({ code }) {
     const [mocksIdx, cAttempt] = await Promise.all([loadMocksIndex(), loadAttemptById(ch.creatorAttemptId)]);
     const m = mocksIdx.find((mm) => mm.id === ch.mockId);
     setMock(m || null);
-    setMocksIndex(mocksIdx);
     setCreatorAttempt(cAttempt);
 
     let oAttempt = null;
@@ -4667,13 +4637,7 @@ function ChallengeFlow({ code }) {
 
   if (state === "run") {
     return (
-      <RunMockView
-        mock={mock}
-        questions={questions}
-        onExit={() => (window.location.href = "/")}
-        challengeId={code}
-        mocksIndex={mocksIndex}
-      />
+      <RunMockView mock={mock} questions={questions} onExit={() => (window.location.href = "/")} challengeId={code} />
     );
   }
 
