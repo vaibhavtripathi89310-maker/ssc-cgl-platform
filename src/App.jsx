@@ -2393,312 +2393,333 @@ function RunMockView({ mock, questions, onExit, challengeId }) {
     }
 
     return (
-      <div className="min-h-screen bg-slate-100 flex flex-col items-center py-10 px-4">
-        <div className="max-w-md w-full text-center bg-white border border-slate-200 rounded-2xl shadow-sm p-10">
-          <CheckCircle2 className="mx-auto mb-4 text-emerald-600" size={44} />
-          <h2 className="text-xl font-semibold text-slate-800 mb-1">Test submitted</h2>
-          <p className="text-sm text-slate-500 mb-6">{mock.title}</p>
-          <div className="grid grid-cols-3 gap-3 text-sm mb-6">
-            <button onClick={() => correct > 0 && jumpToReview("correct")} disabled={correct === 0} className="disabled:cursor-default">
-              <div className="text-2xl font-semibold text-emerald-600">{correct}</div>
-              <div className={`text-xs text-slate-400 ${correct > 0 ? "underline decoration-dotted underline-offset-2" : ""}`}>Correct</div>
-            </button>
-            <button onClick={() => incorrect > 0 && jumpToReview("incorrect")} disabled={incorrect === 0} className="disabled:cursor-default">
-              <div className="text-2xl font-semibold text-red-500">{incorrect}</div>
-              <div className={`text-xs text-slate-400 ${incorrect > 0 ? "underline decoration-dotted underline-offset-2" : ""}`}>Incorrect</div>
-            </button>
-            <button onClick={() => skipped > 0 && jumpToReview("skipped")} disabled={skipped === 0} className="disabled:cursor-default">
-              <div className="text-2xl font-semibold text-slate-400">{skipped}</div>
-              <div className={`text-xs text-slate-400 ${skipped > 0 ? "underline decoration-dotted underline-offset-2" : ""}`}>Skipped</div>
-            </button>
-          </div>
-          <div className="text-3xl font-bold text-slate-800 mb-2">{score} <span className="text-lg font-normal text-slate-400">/ {mock.totalMarks}</span></div>
-          {percentile !== null && (
-            <div className="inline-block bg-blue-50 text-blue-700 text-xs font-medium px-3 py-1 rounded-full mb-4">
-              Better than {percentile}% of students who've attempted this mock
-            </div>
-          )}
+      <div className="min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 py-8 px-4 sm:px-8">
+        <div className="max-w-6xl mx-auto space-y-6">
+          {/* HERO — score, live stats, back button */}
+          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-950 via-blue-900 to-indigo-900 text-white p-6 sm:p-10 shadow-xl">
+            <div className="absolute -right-16 -top-16 w-72 h-72 bg-blue-400/20 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -left-10 -bottom-16 w-56 h-56 bg-indigo-400/20 rounded-full blur-3xl pointer-events-none" />
+            <div className="relative">
+              <div className="flex items-center gap-2 text-blue-200 mb-1.5">
+                <CheckCircle2 size={18} />
+                <span className="text-xs font-medium uppercase tracking-wide">Test submitted</span>
+              </div>
+              <h2 className="text-lg sm:text-xl font-semibold mb-6">{mock.title}</h2>
 
-          {sectionBreakdown.length > 1 && (
-            <div className="text-left mb-6 space-y-1.5">
-              <div className="text-xs font-medium text-slate-400 mb-1">Section-wise score</div>
-              {sectionBreakdown.map((s) => (
-                <div key={s.label} className="flex items-center justify-between text-xs bg-slate-50 rounded-md px-3 py-1.5">
-                  <span className="text-slate-600">{s.label}</span>
-                  <span className="font-medium text-slate-800">{s.score}</span>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 items-end mb-2">
+                <div className="col-span-2 sm:col-span-1">
+                  <div className="text-4xl sm:text-5xl font-bold">
+                    {score} <span className="text-lg font-normal text-blue-300">/ {mock.totalMarks}</span>
+                  </div>
+                  {percentile !== null && (
+                    <div className="inline-block mt-2 bg-white/15 text-white text-xs font-medium px-3 py-1 rounded-full">
+                      Better than {percentile}% of students
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
-
-          <button onClick={onExit} className="text-sm px-5 py-2.5 rounded-lg bg-slate-900 text-white">
-            Back to admin panel
-          </button>
-        </div>
-
-        <div className="max-w-md w-full mt-6">
-          <ShareResultCard mock={mock} score={score} totalMarks={mock.totalMarks} examLabel={getExam(mock).label} />
-        </div>
-
-        {challengeId ? (
-          <div className="max-w-md w-full mt-6 bg-white border border-slate-200 rounded-2xl p-5 text-center">
-            <Swords size={20} className="mx-auto mb-2 text-blue-700" />
-            <h3 className="text-sm font-semibold text-slate-700 mb-1">
-              {challengeClaim === "taken" ? "This challenge was already completed" : "Challenge accepted!"}
-            </h3>
-            <p className="text-xs text-slate-500 mb-4">
-              {challengeClaim === "taken"
-                ? "Someone else already finished this challenge first — your attempt was still saved, just not linked to it."
-                : "See the full side-by-side answer sheet with whoever sent you this."}
-            </p>
-            {challengeClaim === "claimed" && (
-              <a href={`/challenge/${challengeId}`} className="inline-block bg-blue-900 text-white text-sm font-medium px-4 py-2 rounded-lg">
-                View comparison →
-              </a>
-            )}
-          </div>
-        ) : (
-          <div className="max-w-md w-full mt-6 bg-white border border-slate-200 rounded-2xl p-5">
-            <h3 className="text-sm font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
-              <Swords size={15} className="text-blue-700" /> Challenge a friend
-            </h3>
-            <p className="text-xs text-slate-400 mb-3">
-              Send this exact mock to a friend — once they finish, you'll both see a full side-by-side answer sheet.
-            </p>
-            {myChallengeLink ? (
-              <div className="flex items-center gap-2">
-                <input
-                  readOnly
-                  value={myChallengeLink}
-                  onClick={(e) => e.target.select()}
-                  className="flex-1 text-xs border border-slate-200 rounded-md px-3 py-2 text-slate-600"
-                />
-                <button
-                  onClick={() => navigator.clipboard?.writeText(myChallengeLink)}
-                  className="shrink-0 text-xs px-3 py-2 rounded-md border border-slate-200 text-slate-600"
-                  title="Copy link"
-                >
-                  <Link2 size={13} />
+                <button onClick={() => correct > 0 && jumpToReview("correct")} disabled={correct === 0} className="text-left disabled:cursor-default">
+                  <div className="text-3xl font-bold text-emerald-300">{correct}</div>
+                  <div className={`text-xs text-blue-200 ${correct > 0 ? "underline decoration-dotted underline-offset-2" : ""}`}>Correct</div>
+                </button>
+                <button onClick={() => incorrect > 0 && jumpToReview("incorrect")} disabled={incorrect === 0} className="text-left disabled:cursor-default">
+                  <div className="text-3xl font-bold text-red-300">{incorrect}</div>
+                  <div className={`text-xs text-blue-200 ${incorrect > 0 ? "underline decoration-dotted underline-offset-2" : ""}`}>Incorrect</div>
+                </button>
+                <button onClick={() => skipped > 0 && jumpToReview("skipped")} disabled={skipped === 0} className="text-left disabled:cursor-default">
+                  <div className="text-3xl font-bold text-slate-300">{skipped}</div>
+                  <div className={`text-xs text-blue-200 ${skipped > 0 ? "underline decoration-dotted underline-offset-2" : ""}`}>Skipped</div>
                 </button>
               </div>
-            ) : (
-              <button
-                onClick={handleChallengeAFriend}
-                disabled={!myAttemptId}
-                className="w-full flex items-center justify-center gap-2 bg-blue-900 text-white text-sm font-medium py-2.5 rounded-lg disabled:opacity-50"
-              >
-                <Swords size={15} /> Create Challenge Link
-              </button>
-            )}
-          </div>
-        )}
 
-        {leaderboard.length > 0 && (
-          <div className="max-w-md w-full mt-6 bg-white border border-slate-200 rounded-2xl p-5 text-left">
-            <h3 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-1.5">
-              <Trophy size={15} className="text-amber-500" /> Top scores for this mock
-            </h3>
-            <div className="space-y-1.5">
-              {leaderboard.map((row, i) => (
-                <div
-                  key={row.id}
-                  className={`flex items-center justify-between text-xs rounded-md px-3 py-2 ${
-                    row.id === myAttemptId ? "bg-blue-50 border border-blue-200" : "bg-slate-50"
-                  }`}
-                >
-                  <span className={row.id === myAttemptId ? "font-semibold text-blue-800" : "text-slate-600"}>
-                    #{i + 1}{row.id === myAttemptId ? " · You" : ""}
-                  </span>
-                  <span className="font-medium text-slate-800">{row.score}</span>
+              {sectionBreakdown.length > 1 && (
+                <div className="flex flex-wrap gap-2 mt-4">
+                  {sectionBreakdown.map((s) => (
+                    <div key={s.label} className="bg-white/10 backdrop-blur rounded-lg px-3 py-2 text-xs">
+                      <div className="text-blue-200">{s.label}</div>
+                      <div className="font-semibold">{s.score}</div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
+
+              <button onClick={onExit} className="mt-6 text-sm px-5 py-2.5 rounded-lg bg-white text-blue-950 font-medium hover:bg-blue-50 transition-colors">
+                Back to admin panel
+              </button>
             </div>
           </div>
-        )}
 
-        {cutoffs.length > 0 && (
-          <div className="max-w-md w-full mt-6 bg-white border border-slate-200 rounded-2xl p-5 text-left">
-            <h3 className="text-sm font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
-              <BarChart2 size={15} className="text-blue-700" /> Your score vs. past cutoffs
-            </h3>
-            <p className="text-xs text-slate-400 mb-3">How {score} compares to recent years' actual SSC CGL cutoffs.</p>
-            <div className="space-y-1.5">
-              {cutoffs.slice(0, 5).map((c) => {
-                const cleared = score >= c.cutoff;
-                return (
-                  <div key={c.id} className="flex items-center justify-between text-xs bg-slate-50 rounded-md px-3 py-2">
-                    <div>
-                      <div className="text-slate-700 font-medium">{c.year}</div>
-                      <div className="text-slate-400">Cutoff: {c.cutoff}</div>
-                    </div>
-                    <span
-                      className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
-                        cleared ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"
+          {/* SECTION PERFORMANCE — interactive pie, right below the score */}
+          <SectionPerformancePicker sections={sections} sectionBreakdown={sectionBreakdown} />
+
+          {/* Share / Challenge / Leaderboard / Cutoffs */}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
+            <ShareResultCard mock={mock} score={score} totalMarks={mock.totalMarks} examLabel={getExam(mock).label} />
+
+            {challengeId ? (
+              <div className="bg-white border border-slate-200 rounded-2xl p-5 text-center">
+                <Swords size={20} className="mx-auto mb-2 text-blue-700" />
+                <h3 className="text-sm font-semibold text-slate-700 mb-1">
+                  {challengeClaim === "taken" ? "This challenge was already completed" : "Challenge accepted!"}
+                </h3>
+                <p className="text-xs text-slate-500 mb-4">
+                  {challengeClaim === "taken"
+                    ? "Someone else already finished this challenge first — your attempt was still saved, just not linked to it."
+                    : "See the full side-by-side answer sheet with whoever sent you this."}
+                </p>
+                {challengeClaim === "claimed" && (
+                  <a href={`/challenge/${challengeId}`} className="inline-block bg-blue-900 text-white text-sm font-medium px-4 py-2 rounded-lg">
+                    View comparison →
+                  </a>
+                )}
+              </div>
+            ) : (
+              <div className="bg-white border border-slate-200 rounded-2xl p-5">
+                <h3 className="text-sm font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
+                  <Swords size={15} className="text-blue-700" /> Challenge a friend
+                </h3>
+                <p className="text-xs text-slate-400 mb-3">
+                  Send this exact mock to a friend — once they finish, you'll both see a full side-by-side answer sheet.
+                </p>
+                {myChallengeLink ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      readOnly
+                      value={myChallengeLink}
+                      onClick={(e) => e.target.select()}
+                      className="flex-1 text-xs border border-slate-200 rounded-md px-3 py-2 text-slate-600"
+                    />
+                    <button
+                      onClick={() => navigator.clipboard?.writeText(myChallengeLink)}
+                      className="shrink-0 text-xs px-3 py-2 rounded-md border border-slate-200 text-slate-600"
+                      title="Copy link"
+                    >
+                      <Link2 size={13} />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleChallengeAFriend}
+                    disabled={!myAttemptId}
+                    className="w-full flex items-center justify-center gap-2 bg-blue-900 text-white text-sm font-medium py-2.5 rounded-lg disabled:opacity-50"
+                  >
+                    <Swords size={15} /> Create Challenge Link
+                  </button>
+                )}
+              </div>
+            )}
+
+            {leaderboard.length > 0 && (
+              <div className="bg-white border border-slate-200 rounded-2xl p-5 text-left">
+                <h3 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-1.5">
+                  <Trophy size={15} className="text-amber-500" /> Top scores for this mock
+                </h3>
+                <div className="space-y-1.5">
+                  {leaderboard.map((row, i) => (
+                    <div
+                      key={row.id}
+                      className={`flex items-center justify-between text-xs rounded-md px-3 py-2 ${
+                        row.id === myAttemptId ? "bg-blue-50 border border-blue-200" : "bg-slate-50"
                       }`}
                     >
-                      {cleared ? "Would clear" : "Below cutoff"}
-                    </span>
+                      <span className={row.id === myAttemptId ? "font-semibold text-blue-800" : "text-slate-600"}>
+                        #{i + 1}{row.id === myAttemptId ? " · You" : ""}
+                      </span>
+                      <span className="font-medium text-slate-800">{row.score}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {cutoffs.length > 0 && (
+              <div className="bg-white border border-slate-200 rounded-2xl p-5 text-left">
+                <h3 className="text-sm font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
+                  <BarChart2 size={15} className="text-blue-700" /> Your score vs. past cutoffs
+                </h3>
+                <p className="text-xs text-slate-400 mb-3">How {score} compares to recent years' actual SSC CGL cutoffs.</p>
+                <div className="space-y-1.5">
+                  {cutoffs.slice(0, 5).map((c) => {
+                    const cleared = score >= c.cutoff;
+                    return (
+                      <div key={c.id} className="flex items-center justify-between text-xs bg-slate-50 rounded-md px-3 py-2">
+                        <div>
+                          <div className="text-slate-700 font-medium">{c.year}</div>
+                          <div className="text-slate-400">Cutoff: {c.cutoff}</div>
+                        </div>
+                        <span
+                          className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
+                            cleared ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"
+                          }`}
+                        >
+                          {cleared ? "Would clear" : "Below cutoff"}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-6">
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 text-left shadow-sm">
+              <h3 className="text-sm font-semibold text-slate-700 mb-1">Time analysis</h3>
+              <p className="text-xs text-slate-400 mb-4">How long you spent on each question, compared to a fair pace for this test.</p>
+              <div className="flex items-center gap-3 text-[11px] text-slate-500 mb-4 flex-wrap">
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-emerald-100 border border-emerald-200" /> Quick</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-amber-100 border border-amber-200" /> Normal pace</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-red-100 border border-red-200" /> Took long</span>
+              </div>
+              {sections.map((s) => {
+                const sList = questions[s.key] || [];
+                if (sList.length === 0) return null;
+                return (
+                  <div key={s.key} className="mb-4 last:mb-0">
+                    {sections.length > 1 && <div className="text-xs font-medium text-slate-500 mb-2">{s.label}</div>}
+                    <div className="grid grid-cols-5 sm:grid-cols-10 lg:grid-cols-12 gap-2">
+                      {sList.map((qq, i) => (
+                        <div
+                          key={qq.id}
+                          title={`${s.label} · Q${i + 1} — ${formatTime(timeSpent[qq.id] || 0)}`}
+                          className={`rounded-md border text-center py-1.5 ${timeBadge(qq, s.key)}`}
+                        >
+                          <div className="text-[10px] font-semibold">{i + 1}</div>
+                          <div className="text-[10px]">{formatTime(timeSpent[qq.id] || 0)}</div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 );
               })}
             </div>
-          </div>
-        )}
 
-        <div className="max-w-2xl w-full mt-6 space-y-3">
-          <div className="bg-white border border-slate-200 rounded-xl p-5 text-left">
-            <h3 className="text-sm font-semibold text-slate-700 mb-1">Time analysis</h3>
-            <p className="text-xs text-slate-400 mb-4">How long you spent on each question, compared to a fair pace for this test.</p>
-            <div className="flex items-center gap-3 text-[11px] text-slate-500 mb-4 flex-wrap">
-              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-emerald-100 border border-emerald-200" /> Quick</span>
-              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-amber-100 border border-amber-200" /> Normal pace</span>
-              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-red-100 border border-red-200" /> Took long</span>
-            </div>
-            {sections.map((s) => {
-              const sList = questions[s.key] || [];
-              if (sList.length === 0) return null;
-              return (
-                <div key={s.key} className="mb-4 last:mb-0">
-                  {sections.length > 1 && <div className="text-xs font-medium text-slate-500 mb-2">{s.label}</div>}
-                  <div className="grid grid-cols-5 sm:grid-cols-8 gap-2">
-                    {sList.map((qq, i) => (
-                      <div
-                        key={qq.id}
-                        title={`${s.label} · Q${i + 1} — ${formatTime(timeSpent[qq.id] || 0)}`}
-                        className={`rounded-md border text-center py-1.5 ${timeBadge(qq, s.key)}`}
-                      >
-                        <div className="text-[10px] font-semibold">{i + 1}</div>
-                        <div className="text-[10px]">{formatTime(timeSpent[qq.id] || 0)}</div>
-                      </div>
-                    ))}
-                  </div>
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 text-left shadow-sm">
+              <h3 className="text-sm font-semibold text-slate-700 mb-1">Topic-wise performance</h3>
+              <p className="text-xs text-slate-400 mb-4">Where to focus your revision, based on this attempt — this mock only.</p>
+              {weakTopics.length > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-md px-3 py-2 text-xs text-red-700 mb-2">
+                  📌 Focus your revision on: <span className="font-medium">{weakTopics.join(", ")}</span>
                 </div>
-              );
-            })}
-          </div>
-
-          <div className="bg-white border border-slate-200 rounded-xl p-5 text-left">
-            <h3 className="text-sm font-semibold text-slate-700 mb-1">Topic-wise performance</h3>
-            <p className="text-xs text-slate-400 mb-4">Where to focus your revision, based on this attempt — this mock only.</p>
-            {weakTopics.length > 0 && (
-              <div className="bg-red-50 border border-red-200 rounded-md px-3 py-2 text-xs text-red-700 mb-2">
-                📌 Focus your revision on: <span className="font-medium">{weakTopics.join(", ")}</span>
-              </div>
-            )}
-            {strongTopics.length > 0 && (
-              <div className="bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2 text-xs text-emerald-700 mb-4">
-                ✅ You're doing well in: <span className="font-medium">{strongTopics.join(", ")}</span>
-              </div>
-            )}
-            <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
-              <div className="sm:col-span-3">
-                <SubjectAccuracyChart
-                  sectionAccuracy={topicRows.map((t) => ({ label: t.topic, correct: t.correct, total: t.total, accuracy: t.accuracy }))}
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <AnswerBreakdownDonut attempts={[{ correct, incorrect, skipped }]} caption="questions in this mock" />
+              )}
+              {strongTopics.length > 0 && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2 text-xs text-emerald-700 mb-4">
+                  ✅ You're doing well in: <span className="font-medium">{strongTopics.join(", ")}</span>
+                </div>
+              )}
+              <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+                <div className="lg:col-span-3">
+                  <SubjectAccuracyChart
+                    sectionAccuracy={topicRows.map((t) => ({ label: t.topic, correct: t.correct, total: t.total, accuracy: t.accuracy }))}
+                  />
+                </div>
+                <div className="lg:col-span-2">
+                  <AnswerBreakdownDonut attempts={[{ correct, incorrect, skipped }]} caption="questions in this mock" />
+                </div>
               </div>
             </div>
-          </div>
 
-          <div ref={reviewSectionRef} className="flex items-center justify-between px-1">
-            <h3 className="text-sm font-semibold text-slate-700">
-              Answer review{reviewFilter !== "all" ? ` — ${reviewFilter} only` : ""}
-            </h3>
-            {reviewFilter !== "all" && (
-              <button onClick={() => setReviewFilter("all")} className="text-xs text-blue-700 font-medium">
-                Show all →
-              </button>
-            )}
-          </div>
-          {sections
-            .flatMap((s) => (questions[s.key] || []).map((qq, i) => ({ s, qq, i })))
-            .filter(({ qq }) => {
-              const sel = answers[qq.id];
-              if (reviewFilter === "all") return true;
-              if (reviewFilter === "skipped") return sel === undefined;
-              if (reviewFilter === "correct") return sel === qq.answer;
-              return sel !== undefined && sel !== qq.answer; // 'incorrect'
-            })
-            .map(({ s, qq, i }) => {
-              const sel = answers[qq.id];
-              const isCorrect = sel === qq.answer;
-              const isSkipped = sel === undefined;
-              return (
-                <div key={qq.id} className="bg-white border border-slate-200 rounded-xl p-5 text-left">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs text-slate-400">{s.label} · Q{i + 1}</span>
-                    <span
-                      className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                        isSkipped ? "bg-slate-100 text-slate-500" : isCorrect ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"
-                      }`}
-                    >
-                      {isSkipped ? "Skipped" : isCorrect ? "Correct" : "Incorrect"}
-                    </span>
-                  </div>
-                  <p className="text-sm text-slate-800 mb-3"><MathText text={qq.text} /></p>
-                  <div className="space-y-1.5">
-                    {qq.options.map((opt, oi) => {
-                      const isYourPick = sel === oi;
-                      const isRightAnswer = qq.answer === oi;
-                      return (
-                        <div
-                          key={oi}
-                          className={`text-sm px-3 py-2 rounded-md border ${
-                            isRightAnswer
-                              ? "border-emerald-400 bg-emerald-50 text-emerald-800"
-                              : isYourPick
-                              ? "border-red-300 bg-red-50 text-red-700"
-                              : "border-slate-200 text-slate-600"
+            <div ref={reviewSectionRef} className="flex items-center justify-between px-1">
+              <h3 className="text-sm font-semibold text-slate-700">
+                Answer review{reviewFilter !== "all" ? ` — ${reviewFilter} only` : ""}
+              </h3>
+              {reviewFilter !== "all" && (
+                <button onClick={() => setReviewFilter("all")} className="text-xs text-blue-700 font-medium">
+                  Show all →
+                </button>
+              )}
+            </div>
+            <div className="space-y-4">
+              {sections
+                .flatMap((s) => (questions[s.key] || []).map((qq, i) => ({ s, qq, i })))
+                .filter(({ qq }) => {
+                  const sel = answers[qq.id];
+                  if (reviewFilter === "all") return true;
+                  if (reviewFilter === "skipped") return sel === undefined;
+                  if (reviewFilter === "correct") return sel === qq.answer;
+                  return sel !== undefined && sel !== qq.answer; // 'incorrect'
+                })
+                .map(({ s, qq, i }) => {
+                  const sel = answers[qq.id];
+                  const isCorrect = sel === qq.answer;
+                  const isSkipped = sel === undefined;
+                  return (
+                    <div key={qq.id} className="bg-white border border-slate-200 rounded-xl p-5 text-left">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs text-slate-400">{s.label} · Q{i + 1}</span>
+                        <span
+                          className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                            isSkipped ? "bg-slate-100 text-slate-500" : isCorrect ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"
                           }`}
                         >
-                          {LETTERS[oi]}. <MathText text={opt} />
-                          {isRightAnswer && <span className="ml-2 text-xs font-medium">✓ Correct answer</span>}
-                          {isYourPick && !isRightAnswer && <span className="ml-2 text-xs font-medium">Your answer</span>}
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {qq.explanation && (
-                    <p className="text-xs text-slate-500 mt-3 italic"><MathText text={qq.explanation} /></p>
-                  )}
-                </div>
-              );
-            })}
-        </div>
+                          {isSkipped ? "Skipped" : isCorrect ? "Correct" : "Incorrect"}
+                        </span>
+                      </div>
+                      <p className="text-sm text-slate-800 mb-3"><MathText text={qq.text} /></p>
+                      <div className="space-y-1.5">
+                        {qq.options.map((opt, oi) => {
+                          const isYourPick = sel === oi;
+                          const isRightAnswer = qq.answer === oi;
+                          return (
+                            <div
+                              key={oi}
+                              className={`text-sm px-3 py-2 rounded-md border ${
+                                isRightAnswer
+                                  ? "border-emerald-400 bg-emerald-50 text-emerald-800"
+                                  : isYourPick
+                                  ? "border-red-300 bg-red-50 text-red-700"
+                                  : "border-slate-200 text-slate-600"
+                              }`}
+                            >
+                              {LETTERS[oi]}. <MathText text={opt} />
+                              {isRightAnswer && <span className="ml-2 text-xs font-medium">✓ Correct answer</span>}
+                              {isYourPick && !isRightAnswer && <span className="ml-2 text-xs font-medium">Your answer</span>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {qq.explanation && (
+                        <p className="text-xs text-slate-500 mt-3 italic"><MathText text={qq.explanation} /></p>
+                      )}
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
 
-        <div className="max-w-2xl w-full mt-6 space-y-3">
-          {mock.videoUrl && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {mock.videoUrl && (
+              <a
+                href={mock.videoUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 bg-white border border-slate-200 rounded-2xl p-5 hover:border-red-300 transition-colors"
+              >
+                <span className="shrink-0 w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center">
+                  <Youtube size={20} />
+                </span>
+                <span className="text-left">
+                  <span className="block text-sm font-semibold text-slate-800">Watch me take this exact test</span>
+                  <span className="block text-xs text-slate-500">See the strategy and thinking behind every question →</span>
+                </span>
+              </a>
+            )}
             <a
-              href={mock.videoUrl}
+              href={YOUTUBE_CHANNEL_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-3 bg-white border border-slate-200 rounded-2xl p-5 hover:border-red-300 transition-colors"
+              className={`block bg-gradient-to-r from-red-600 to-red-500 text-white rounded-2xl p-6 text-center hover:opacity-95 transition-opacity ${
+                mock.videoUrl ? "" : "md:col-span-2"
+              }`}
             >
-              <span className="shrink-0 w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center">
-                <Youtube size={20} />
-              </span>
-              <span className="text-left">
-                <span className="block text-sm font-semibold text-slate-800">Watch me take this exact test</span>
-                <span className="block text-xs text-slate-500">See the strategy and thinking behind every question →</span>
+              <div className="text-sm font-semibold mb-1">Want to seriously prepare for {getExam(mock).label}?</div>
+              <div className="text-xs text-red-50 mb-3">
+                Get free strategy sessions, topic breakdowns, and more mocks on our YouTube channel.
+              </div>
+              <span className="inline-block bg-white text-red-600 text-sm font-medium px-4 py-2 rounded-lg">
+                Visit The 100 Percentiler →
               </span>
             </a>
-          )}
-          <a
-            href={YOUTUBE_CHANNEL_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block bg-gradient-to-r from-red-600 to-red-500 text-white rounded-2xl p-6 text-center hover:opacity-95 transition-opacity"
-          >
-            <div className="text-sm font-semibold mb-1">Want to seriously prepare for {getExam(mock).label}?</div>
-            <div className="text-xs text-red-50 mb-3">
-              Get free strategy sessions, topic breakdowns, and more mocks on our YouTube channel.
-            </div>
-            <span className="inline-block bg-white text-red-600 text-sm font-medium px-4 py-2 rounded-lg">
-              Visit The 100 Percentiler →
-            </span>
-          </a>
+          </div>
         </div>
       </div>
     );
@@ -3536,7 +3557,7 @@ function SubjectAccuracyChart({ sectionAccuracy }) {
           contentStyle={{ borderRadius: 10, border: "1px solid #e2e8f0", fontSize: 12 }}
           formatter={(value, _name, props) => [`${value}% (${props.payload.correct}/${props.payload.total})`, "Accuracy"]}
         />
-        <Bar dataKey="accuracyPct" radius={[0, 6, 6, 0]} barSize={20}>
+        <Bar dataKey="accuracyPct" radius={[0, 6, 6, 0]} barSize={20} minPointSize={3}>
           <LabelList dataKey="accuracyPct" position="right" formatter={(v) => `${v}%`} style={{ fontSize: 11, fill: "#475569", fontWeight: 600 }} />
           {data.map((d) => (
             <Cell key={d.label} fill={d.accuracyPct < 40 ? "#f87171" : d.accuracyPct < 70 ? "#fbbf24" : "#6366f1"} />
@@ -3580,13 +3601,97 @@ function AnswerBreakdownDonut({ attempts, caption = "questions answered across a
   );
 }
 
+// Interactive per-section drill-down for the results screen, right under the
+// score — pick a section (skipped entirely for a Sectional Mock, which only
+// ever has one) and see a pie chart of just that section's correct/
+// incorrect/skipped split. Built from `sectionBreakdown` (already computed
+// per-mock in RunMockView's computeResults()), so this never touches any
+// other mock's data.
+function SectionPerformancePicker({ sections, sectionBreakdown }) {
+  const [selectedIdx, setSelectedIdx] = useState(0);
+  const sel = sections[selectedIdx];
+  const stats = sectionBreakdown[selectedIdx] || { correct: 0, incorrect: 0, skipped: 0, score: 0 };
+  const total = stats.correct + stats.incorrect + stats.skipped;
+  const accuracyPct = total ? Math.round((stats.correct / total) * 100) : 0;
+  const data = [
+    { name: "Correct", value: stats.correct, color: "#10b981" },
+    { name: "Incorrect", value: stats.incorrect, color: "#f87171" },
+    { name: "Skipped", value: stats.skipped, color: "#cbd5e1" },
+  ].filter((d) => d.value > 0);
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+      <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+        <h3 className="text-sm font-semibold text-slate-700">Section performance</h3>
+        {sections.length > 1 && (
+          <div className="flex flex-wrap gap-1.5">
+            {sections.map((s, i) => (
+              <button
+                key={s.key}
+                onClick={() => setSelectedIdx(i)}
+                className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                  i === selectedIdx
+                    ? "bg-blue-900 text-white border-blue-900"
+                    : "bg-white text-slate-500 border-slate-200 hover:border-blue-300"
+                }`}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 items-center">
+        <ResponsiveContainer width="100%" height={220}>
+          <PieChart>
+            <Pie data={data} dataKey="value" nameKey="name" outerRadius={90} strokeWidth={2} stroke="#fff">
+              {data.map((d) => (
+                <Cell key={d.name} fill={d.color} />
+              ))}
+            </Pie>
+            <Tooltip
+              contentStyle={{ borderRadius: 10, border: "1px solid #e2e8f0", fontSize: 12 }}
+              formatter={(value, name) => [`${value} (${total ? Math.round((value / total) * 100) : 0}%)`, name]}
+            />
+            <Legend verticalAlign="bottom" height={28} iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+          </PieChart>
+        </ResponsiveContainer>
+        <div className="space-y-4">
+          <div>
+            <div className="text-4xl font-bold text-slate-800">{accuracyPct}%</div>
+            <div className="text-xs text-slate-400">Accuracy in {sel.label}</div>
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="bg-emerald-50 rounded-lg py-2">
+              <div className="font-semibold text-emerald-700">{stats.correct}</div>
+              <div className="text-[10px] text-emerald-600">Correct</div>
+            </div>
+            <div className="bg-red-50 rounded-lg py-2">
+              <div className="font-semibold text-red-600">{stats.incorrect}</div>
+              <div className="text-[10px] text-red-500">Incorrect</div>
+            </div>
+            <div className="bg-slate-50 rounded-lg py-2">
+              <div className="font-semibold text-slate-600">{stats.skipped}</div>
+              <div className="text-[10px] text-slate-400">Skipped</div>
+            </div>
+          </div>
+          <div className="text-xs text-slate-400">
+            Score in this section: <span className="font-medium text-slate-700">{stats.score}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Subject-wise accuracy and the "silly mistakes" heuristic both need the real
 // question list (correct answer + which section each question belongs to)
 // for every mock in `attempts` — not something the attempt rows carry
 // themselves, so this is a one-time fetch per distinct mock, mirroring the
-// same pattern Analytics uses for "toughest questions". Shared by My
-// Progress (all attempts) and the results-screen exam performance panel
-// (attempts filtered to just this exam).
+// same pattern Analytics uses for "toughest questions". Powers My Progress's
+// exam-wide dashboard (ExamPerformancePanel) — never used on the per-mock
+// results screen, which builds its charts straight from in-memory attempt
+// data instead (see SectionPerformancePicker above).
 function useSectionStats(attempts, mocksIndex) {
   const [sectionAccuracy, setSectionAccuracy] = useState([]);
   const [sillyMistakeCount, setSillyMistakeCount] = useState(0);
