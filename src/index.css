@@ -6,3 +6,11 @@ body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
+
+/* Recharts makes pie/bar segments focusable for keyboard accessibility, which
+   means a plain click also leaves the browser's default focus rectangle
+   drawn on top of the clicked slice/bar. Keyboard focus still works — this
+   only removes the visual outline that a mouse click leaves behind. */
+.recharts-wrapper :focus {
+  outline: none;
+}
