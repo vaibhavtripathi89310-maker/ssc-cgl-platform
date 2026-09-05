@@ -15,6 +15,10 @@ import {
 } from "./lib/storage";
 import { signIn, signOut, getSession, onAuthStateChange } from "./lib/auth";
 import { getDeviceId } from "./lib/device";
+import {
+  ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  BarChart, Bar, Cell, PieChart, Pie, Legend, LabelList,
+} from "recharts";
 
 // ============================================================================
 // MATH RENDERING
@@ -3491,26 +3495,96 @@ function accuracyPercentFor(attempt) {
 }
 
 function ProgressTrendChart({ attempts, mocksIndex }) {
-  const pts = attempts.slice(-20).map((a) => {
+  const recent = attempts.slice(-20);
+  const data = recent.map((a, i) => {
     const accuracyPct = accuracyPercentFor(a);
-    return { accuracyPct, scorePct: scorePercentFor(a, mocksIndex, accuracyPct) };
+    return {
+      label: `Test ${i + 1}`,
+      date: new Date(a.createdAt).toLocaleDateString(),
+      Score: Math.round(scorePercentFor(a, mocksIndex, accuracyPct)),
+      Accuracy: Math.round(accuracyPct),
+    };
   });
-  if (pts.length < 2) {
+  if (data.length < 2) {
     return <p className="text-xs text-slate-400">Take a couple more tests to see a trend here.</p>;
   }
-  const W = 600, H = 140, PAD = 6;
-  const stepX = (W - PAD * 2) / (pts.length - 1);
-  const toXY = (val, i) => `${PAD + i * stepX},${PAD + (1 - val / 100) * (H - PAD * 2)}`;
+  return (
+    <ResponsiveContainer width="100%" height={260}>
+      <ComposedChart data={data} margin={{ top: 8, right: 12, left: -18, bottom: 0 }}>
+        <defs>
+          <linearGradient id="scoreFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.35} />
+            <stop offset="95%" stopColor="#6366f1" stopOpacity={0.02} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+        <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+        <YAxis domain={[0, 100]} ticks={[0, 25, 50, 75, 100]} tickFormatter={(v) => `${v}%`} tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={40} />
+        <Tooltip
+          contentStyle={{ borderRadius: 10, border: "1px solid #e2e8f0", fontSize: 12 }}
+          formatter={(value, name) => [`${value}%`, name]}
+          labelFormatter={(label, payload) => (payload?.[0]?.payload?.date ? `${label} · ${payload[0].payload.date}` : label)}
+        />
+        <Legend verticalAlign="top" height={28} iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+        <Area type="monotone" dataKey="Score" stroke="#6366f1" strokeWidth={2.5} fill="url(#scoreFill)" dot={{ r: 3, fill: "#6366f1" }} activeDot={{ r: 5 }} />
+        <Line type="monotone" dataKey="Accuracy" stroke="#10b981" strokeWidth={2.5} dot={{ r: 3, fill: "#10b981" }} activeDot={{ r: 5 }} />
+      </ComposedChart>
+    </ResponsiveContainer>
+  );
+}
+
+function SubjectAccuracyChart({ sectionAccuracy }) {
+  const data = sectionAccuracy.map((s) => ({ ...s, accuracyPct: Math.round(s.accuracy * 100) }));
+  return (
+    <ResponsiveContainer width="100%" height={Math.max(140, data.length * 52)}>
+      <BarChart data={data} layout="vertical" margin={{ top: 0, right: 28, left: 0, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
+        <XAxis type="number" domain={[0, 100]} ticks={[0, 25, 50, 75, 100]} tickFormatter={(v) => `${v}%`} tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+        <YAxis type="category" dataKey="label" width={90} tick={{ fontSize: 11, fill: "#475569" }} axisLine={false} tickLine={false} />
+        <Tooltip
+          contentStyle={{ borderRadius: 10, border: "1px solid #e2e8f0", fontSize: 12 }}
+          formatter={(value, _name, props) => [`${value}% (${props.payload.correct}/${props.payload.total})`, "Accuracy"]}
+        />
+        <Bar dataKey="accuracyPct" radius={[0, 6, 6, 0]} barSize={20}>
+          <LabelList dataKey="accuracyPct" position="right" formatter={(v) => `${v}%`} style={{ fontSize: 11, fill: "#475569", fontWeight: 600 }} />
+          {data.map((d) => (
+            <Cell key={d.label} fill={d.accuracyPct < 40 ? "#f87171" : d.accuracyPct < 70 ? "#fbbf24" : "#6366f1"} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+function AnswerBreakdownDonut({ attempts }) {
+  const totals = attempts.reduce(
+    (acc, a) => ({ correct: acc.correct + a.correct, incorrect: acc.incorrect + a.incorrect, skipped: acc.skipped + a.skipped }),
+    { correct: 0, incorrect: 0, skipped: 0 }
+  );
+  const data = [
+    { name: "Correct", value: totals.correct, color: "#10b981" },
+    { name: "Incorrect", value: totals.incorrect, color: "#f87171" },
+    { name: "Skipped", value: totals.skipped, color: "#cbd5e1" },
+  ].filter((d) => d.value > 0);
+  const grandTotal = totals.correct + totals.incorrect + totals.skipped;
+  if (grandTotal === 0) return null;
   return (
     <div>
-      <div className="flex items-center gap-3 text-[11px] text-slate-500 mb-2">
-        <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-blue-600 inline-block" /> Score %</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-emerald-500 inline-block" /> Accuracy %</span>
-      </div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-32">
-        <polyline points={pts.map((p, i) => toXY(p.scorePct, i)).join(" ")} fill="none" stroke="#2563eb" strokeWidth="2" />
-        <polyline points={pts.map((p, i) => toXY(p.accuracyPct, i)).join(" ")} fill="none" stroke="#10b981" strokeWidth="2" />
-      </svg>
+      <ResponsiveContainer width="100%" height={220}>
+        <PieChart>
+          <Pie data={data} dataKey="value" nameKey="name" innerRadius={55} outerRadius={80} paddingAngle={3} strokeWidth={0}>
+            {data.map((d) => (
+              <Cell key={d.name} fill={d.color} />
+            ))}
+          </Pie>
+          <Tooltip
+            contentStyle={{ borderRadius: 10, border: "1px solid #e2e8f0", fontSize: 12 }}
+            formatter={(value, name) => [`${value} (${Math.round((value / grandTotal) * 100)}%)`, name]}
+          />
+          <Legend verticalAlign="bottom" height={28} iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+        </PieChart>
+      </ResponsiveContainer>
+      <p className="text-center text-xs text-slate-400 -mt-1">{grandTotal} questions answered across all attempts</p>
     </div>
   );
 }
@@ -3661,24 +3735,19 @@ function ProgressView({ attempts, mocksIndex, onBack, onPractice }) {
               <ProgressTrendChart attempts={attempts} mocksIndex={mocksIndex} />
             </div>
 
-            {!statsLoading && sectionAccuracy.length > 0 && (
-              <div className="bg-white border border-slate-200 rounded-xl p-5 mb-4">
-                <h2 className="text-sm font-semibold text-slate-700 mb-3">Subject-wise accuracy</h2>
-                <div className="space-y-2.5">
-                  {sectionAccuracy.map((s) => (
-                    <div key={s.label}>
-                      <div className="flex items-center justify-between text-xs text-slate-600 mb-1">
-                        <span>{s.label}</span>
-                        <span className="text-slate-400">{Math.round(s.accuracy * 100)}% ({s.correct}/{s.total})</span>
-                      </div>
-                      <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-blue-600 rounded-full" style={{ width: `${Math.round(s.accuracy * 100)}%` }} />
-                      </div>
-                    </div>
-                  ))}
+            <div className="grid grid-cols-1 sm:grid-cols-5 gap-4 mb-4">
+              {!statsLoading && sectionAccuracy.length > 0 && (
+                <div className="sm:col-span-3 bg-white border border-slate-200 rounded-xl p-5">
+                  <h2 className="text-sm font-semibold text-slate-700 mb-3">Subject-wise accuracy</h2>
+                  <SubjectAccuracyChart sectionAccuracy={sectionAccuracy} />
                 </div>
+              )}
+              <div className={`bg-white border border-slate-200 rounded-xl p-5 ${sectionAccuracy.length > 0 ? "sm:col-span-2" : "sm:col-span-5"}`}>
+                <h2 className="text-sm font-semibold text-slate-700 mb-1">Correct vs. incorrect vs. skipped</h2>
+                <p className="text-xs text-slate-400 mb-2">Across every attempt on this device.</p>
+                <AnswerBreakdownDonut attempts={attempts} />
               </div>
-            )}
+            </div>
 
             {weakTopics.length > 0 && (
               <div className="bg-white border border-slate-200 rounded-xl p-5 mb-4">
