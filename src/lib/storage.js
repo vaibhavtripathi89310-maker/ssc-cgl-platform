@@ -255,6 +255,10 @@ export async function loadDeviceAttempts(deviceId) {
     skipped: r.skipped,
     totalTime: r.total_time,
     topicBreakdown: r.topic_breakdown || [],
+    // Per-question answers/timing — needed for My Progress's silly-mistake
+    // heuristic (wrong answer + unusually fast time on that question).
+    answers: r.answers || {},
+    timeSpent: r.time_spent || {},
     createdAt: r.created_at,
   }));
 }

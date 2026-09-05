@@ -3476,6 +3476,45 @@ function computeStreak(attempts) {
   return streak;
 }
 
+// Score, normalized to a 0-100 "percent of total marks" scale so attempts
+// across different mocks (and different exams — SSC CGL's 200 vs GMAT's 64)
+// are comparable on one chart/average. Falls back to accuracy% for the rare
+// case of a deleted mock (totalMarks unavailable), rather than a gap.
+function scorePercentFor(attempt, mocksIndex, accuracyPct) {
+  const mock = mocksIndex.find((m) => m.id === attempt.mockId);
+  if (!mock?.totalMarks) return accuracyPct;
+  return Math.max(0, Math.min(100, (attempt.score / mock.totalMarks) * 100));
+}
+function accuracyPercentFor(attempt) {
+  const total = attempt.correct + attempt.incorrect + attempt.skipped;
+  return total ? (attempt.correct / total) * 100 : 0;
+}
+
+function ProgressTrendChart({ attempts, mocksIndex }) {
+  const pts = attempts.slice(-20).map((a) => {
+    const accuracyPct = accuracyPercentFor(a);
+    return { accuracyPct, scorePct: scorePercentFor(a, mocksIndex, accuracyPct) };
+  });
+  if (pts.length < 2) {
+    return <p className="text-xs text-slate-400">Take a couple more tests to see a trend here.</p>;
+  }
+  const W = 600, H = 140, PAD = 6;
+  const stepX = (W - PAD * 2) / (pts.length - 1);
+  const toXY = (val, i) => `${PAD + i * stepX},${PAD + (1 - val / 100) * (H - PAD * 2)}`;
+  return (
+    <div>
+      <div className="flex items-center gap-3 text-[11px] text-slate-500 mb-2">
+        <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-blue-600 inline-block" /> Score %</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-emerald-500 inline-block" /> Accuracy %</span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-32">
+        <polyline points={pts.map((p, i) => toXY(p.scorePct, i)).join(" ")} fill="none" stroke="#2563eb" strokeWidth="2" />
+        <polyline points={pts.map((p, i) => toXY(p.accuracyPct, i)).join(" ")} fill="none" stroke="#10b981" strokeWidth="2" />
+      </svg>
+    </div>
+  );
+}
+
 function ProgressView({ attempts, mocksIndex, onBack, onPractice }) {
   const streak = computeStreak(attempts);
   const topicAgg = {};
@@ -3491,6 +3530,88 @@ function ProgressView({ attempts, mocksIndex, onBack, onPractice }) {
     .filter((t) => t.accuracy < 0.4)
     .sort((a, b) => a.accuracy - b.accuracy)
     .map((t) => t.topic);
+
+  const last8 = attempts.slice(-8);
+  const avgScorePct = last8.length
+    ? Math.round(last8.reduce((sum, a) => sum + scorePercentFor(a, mocksIndex, accuracyPercentFor(a)), 0) / last8.length)
+    : null;
+  const avgAccuracyPct = last8.length ? Math.round(last8.reduce((sum, a) => sum + accuracyPercentFor(a), 0) / last8.length) : null;
+
+  // Subject-wise accuracy and the "silly mistakes" heuristic both need the
+  // real question list (correct answer + which section each question
+  // belongs to) for every mock this device has attempted — not something
+  // the attempt rows carry themselves, so this is a one-time fetch per
+  // distinct mock, mirroring the same pattern Analytics uses for "toughest
+  // questions".
+  const [sectionAccuracy, setSectionAccuracy] = useState([]);
+  const [sillyMistakeCount, setSillyMistakeCount] = useState(0);
+  const [statsLoading, setStatsLoading] = useState(true);
+
+  useEffect(() => {
+    if (attempts.length === 0) {
+      setStatsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setStatsLoading(true);
+      const mockIds = [...new Set(attempts.map((a) => a.mockId))];
+      const questionMaps = await Promise.all(mockIds.map((id) => loadMockQuestions(id).catch(() => ({}))));
+      const qLookup = {}; // qId -> { answer, sectionKey }
+      const mockMeta = {}; // mockId -> { mock, qMap }
+      mockIds.forEach((mockId, i) => {
+        const qMap = questionMaps[i];
+        mockMeta[mockId] = { mock: mocksIndex.find((m) => m.id === mockId), qMap };
+        Object.entries(qMap).forEach(([sectionKey, list]) => {
+          (list || []).forEach((q) => {
+            qLookup[q.id] = { answer: q.answer, sectionKey };
+          });
+        });
+      });
+
+      const secAgg = {};
+      let sillyCount = 0;
+      attempts.forEach((a) => {
+        const meta = mockMeta[a.mockId];
+        if (!meta?.mock) return;
+        const applicableSections = sectionsForMock(meta.mock);
+        const perSectionSeconds = (meta.mock.duration / applicableSections.length) * 60;
+        Object.entries(a.answers || {}).forEach(([qId, sel]) => {
+          const q = qLookup[qId];
+          if (!q) return;
+          const label = sectionLabel(q.sectionKey);
+          if (!secAgg[label]) secAgg[label] = { correct: 0, total: 0 };
+          secAgg[label].total += 1;
+          const isCorrect = sel === q.answer;
+          if (isCorrect) {
+            secAgg[label].correct += 1;
+            return;
+          }
+          // A wrong answer given in well under a fair pace for that
+          // question reads as a rushed guess, not a content gap — this is
+          // an estimate (students don't self-tag guesses), not an exact count.
+          const sectionQCount = (meta.qMap[q.sectionKey] || []).length || 1;
+          const parTime = perSectionSeconds / sectionQCount;
+          const spent = (a.timeSpent || {})[qId] || 0;
+          if (spent < parTime * 0.4) sillyCount += 1;
+        });
+      });
+
+      if (!cancelled) {
+        setSectionAccuracy(
+          Object.entries(secAgg)
+            .map(([label, v]) => ({ label, ...v, accuracy: v.correct / v.total }))
+            .sort((a, b) => b.total - a.total)
+        );
+        setSillyMistakeCount(sillyCount);
+        setStatsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attempts]);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -3516,6 +3637,49 @@ function ProgressView({ attempts, mocksIndex, onBack, onPractice }) {
           </div>
         ) : (
           <>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+              <div className="bg-white border border-slate-200 rounded-lg p-4">
+                <div className="text-2xl font-semibold text-slate-800">{attempts.length}</div>
+                <div className="text-xs text-slate-500 mt-0.5">Tests taken</div>
+              </div>
+              <div className="bg-white border border-slate-200 rounded-lg p-4">
+                <div className="text-2xl font-semibold text-slate-800">{avgScorePct === null ? "—" : `${avgScorePct}%`}</div>
+                <div className="text-xs text-slate-500 mt-0.5">Avg score (last {last8.length})</div>
+              </div>
+              <div className="bg-white border border-slate-200 rounded-lg p-4">
+                <div className="text-2xl font-semibold text-slate-800">{avgAccuracyPct === null ? "—" : `${avgAccuracyPct}%`}</div>
+                <div className="text-xs text-slate-500 mt-0.5">Avg accuracy (last {last8.length})</div>
+              </div>
+              <div className="bg-white border border-slate-200 rounded-lg p-4">
+                <div className="text-2xl font-semibold text-slate-800">{statsLoading ? "—" : sillyMistakeCount}</div>
+                <div className="text-xs text-slate-500 mt-0.5">Silly mistakes (est.)</div>
+              </div>
+            </div>
+
+            <div className="bg-white border border-slate-200 rounded-xl p-5 mb-4">
+              <h2 className="text-sm font-semibold text-slate-700 mb-3">Score &amp; accuracy trend</h2>
+              <ProgressTrendChart attempts={attempts} mocksIndex={mocksIndex} />
+            </div>
+
+            {!statsLoading && sectionAccuracy.length > 0 && (
+              <div className="bg-white border border-slate-200 rounded-xl p-5 mb-4">
+                <h2 className="text-sm font-semibold text-slate-700 mb-3">Subject-wise accuracy</h2>
+                <div className="space-y-2.5">
+                  {sectionAccuracy.map((s) => (
+                    <div key={s.label}>
+                      <div className="flex items-center justify-between text-xs text-slate-600 mb-1">
+                        <span>{s.label}</span>
+                        <span className="text-slate-400">{Math.round(s.accuracy * 100)}% ({s.correct}/{s.total})</span>
+                      </div>
+                      <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-blue-600 rounded-full" style={{ width: `${Math.round(s.accuracy * 100)}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {weakTopics.length > 0 && (
               <div className="bg-white border border-slate-200 rounded-xl p-5 mb-4">
                 <h2 className="text-sm font-semibold text-slate-700 mb-1">Your weak topics</h2>
