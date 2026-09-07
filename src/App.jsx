@@ -2,9 +2,10 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   LayoutDashboard, ListChecks, Plus, Search, Pencil, Eye, Copy, Trash2,
   CheckCircle2, XCircle, AlertCircle, ChevronUp, ChevronDown, Upload,
-  ArrowLeft, Save, X, Lock, Play, Clock, Flag, Download, LogOut,
+  ArrowLeft, ArrowRight, Save, X, Lock, Play, Clock, Flag, Download, LogOut,
   TrendingUp, Target, Youtube, Trophy, Flame, Share2, BarChart2,
   Swords, ThumbsUp, ThumbsDown, Link2, Activity,
+  Landmark, GraduationCap, Award, Sparkles,
 } from "lucide-react";
 import {
   loadMocksIndex, saveMocksIndex, loadMockQuestions, saveMockQuestions, deleteMockQuestions,
@@ -204,6 +205,9 @@ const EXAMS = {
     defaultNegativeMarking: 0.5,
     fullDuration: 60,
     fullTotalMarks: 200,
+    // Locked, one-way section timer: a fixed slice of the total time per
+    // section, "Next Section" is a one-way door — matches the real exam.
+    timerMode: "sectional",
   },
   gmat: {
     key: "gmat",
@@ -218,10 +222,60 @@ const EXAMS = {
     defaultNegativeMarking: 0,
     fullDuration: 135,
     fullTotalMarks: 64,
+    timerMode: "sectional",
+  },
+  snap: {
+    key: "snap",
+    label: "SNAP",
+    tagline: "SNAP — General English, Analytical & Logical Reasoning, Quant/DI/DS & Ethics, Morality & Values.",
+    sections: [
+      { key: "general_english", label: "General English", short: "GE", questionCount: 10 },
+      { key: "analytical_logical_reasoning", label: "Analytical & Logical Reasoning", short: "A-LR", questionCount: 20 },
+      { key: "quant_di_ds", label: "Quantitative, DI & DS", short: "QA-DI-DS", questionCount: 20 },
+      { key: "ethics_morality_values", label: "Ethics, Morality & Values", short: "EMV", questionCount: 10 },
+    ],
+    hasNegativeMarking: true,
+    defaultNegativeMarking: 0.25,
+    fullDuration: 60,
+    fullTotalMarks: 60,
+    // SNAP's real format has no sectional time limit at all — one composite
+    // 60-minute timer for the whole test, and students can jump freely
+    // between any section's questions the entire time. This is a
+    // fundamentally different navigation model from SSC CGL/GMAT's locked
+    // per-section timer, not just different content — see RunMockView's
+    // `isComposite` branches.
+    timerMode: "composite",
   },
 };
 const EXAM_LIST = Object.values(EXAMS);
 const DEFAULT_EXAM = "ssc_cgl";
+// Presentation only (icon/color per exam on the student home screen) — kept
+// separate from EXAMS itself, which stays pure exam-format data. Tailwind
+// needs literal class strings (not computed ones) to keep them in the
+// production build, hence the full class names spelled out per exam here.
+const EXAM_THEME = {
+  ssc_cgl: {
+    icon: Landmark,
+    gradient: "from-blue-600 to-blue-800",
+    ring: "hover:border-blue-300",
+    badgeBg: "bg-blue-50 text-blue-700",
+    iconBg: "bg-blue-100 text-blue-700",
+  },
+  gmat: {
+    icon: GraduationCap,
+    gradient: "from-violet-600 to-purple-800",
+    ring: "hover:border-violet-300",
+    badgeBg: "bg-violet-50 text-violet-700",
+    iconBg: "bg-violet-100 text-violet-700",
+  },
+  snap: {
+    icon: Award,
+    gradient: "from-emerald-600 to-teal-700",
+    ring: "hover:border-emerald-300",
+    badgeBg: "bg-emerald-50 text-emerald-700",
+    iconBg: "bg-emerald-100 text-emerald-700",
+  },
+};
 // Flat list of every section across every exam — safe to use wherever a
 // lookup only needs a section's key/label and doesn't care which exam it's
 // from (e.g. resolving a badge, or sweeping for orphaned questions left
@@ -2120,10 +2174,17 @@ function RunMockView({ mock, questions, onExit, challengeId }) {
   const [qIdx, setQIdx] = useState(0);
   const [answers, setAnswers] = useState({}); // questionId -> optionIndex
   const sections = sectionsForMock(mock);
+  // SNAP's real format has no per-section lock: one composite timer for the
+  // whole test, free navigation between any section's questions the entire
+  // time. SSC CGL/GMAT lock one section at a time with its own timer slice.
+  // This is the single flag everything below branches on.
+  const isComposite = getExam(mock).timerMode === "composite";
   const [saved, setSaved] = useState({}); // questionId -> true (has been Saved & Next'd at least once)
   const [visited, setVisited] = useState({}); // questionId -> true
   const [marked, setMarked] = useState({}); // questionId -> true
-  const [timeLeft, setTimeLeft] = useState(Math.round((mock.duration / sections.length) * 60));
+  const [timeLeft, setTimeLeft] = useState(
+    isComposite ? Math.round(mock.duration * 60) : Math.round((mock.duration / sections.length) * 60)
+  );
   const [timerHidden, setTimerHidden] = useState(false);
   const [finished, setFinished] = useState(false);
   const [toast, setToast] = useState("");
@@ -2136,9 +2197,25 @@ function RunMockView({ mock, questions, onExit, challengeId }) {
     reviewSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
+  // In composite mode `list` is every question from every section, flattened
+  // into one navigable sequence (tagged with which section each came from,
+  // purely for display/grouping) — `qIdx` walks this directly, with no
+  // per-section slicing or locking. In sectional-lock mode `list` stays
+  // scoped to just the current (unlocked) section, same as before.
+  const flatList = sections.flatMap((s) => (questions[s.key] || []).map((qq) => ({ ...qq, _sectionKey: s.key, _sectionLabel: s.label })));
+  const sectionOffsets = {};
+  {
+    let offset = 0;
+    sections.forEach((s) => {
+      sectionOffsets[s.key] = offset;
+      offset += (questions[s.key] || []).length;
+    });
+  }
+
   const section = sections[sectionIdx];
-  const list = section ? questions[section.key] || [] : [];
+  const list = isComposite ? flatList : section ? questions[section.key] || [] : [];
   const q = list[qIdx];
+  const currentSectionLabel = isComposite ? q?._sectionLabel || sections[0]?.label : section?.label;
   const isLastSection = sectionIdx === sections.length - 1;
   const perSectionSeconds = Math.round((mock.duration / sections.length) * 60);
 
@@ -2183,12 +2260,19 @@ function RunMockView({ mock, questions, onExit, challengeId }) {
   useEffect(() => {
     if (finished) return;
     if (timeLeft <= 0) {
+      // Composite mode has no "next section" to advance to — running out of
+      // time ends the whole test, exactly like a manual Finish Test.
+      if (isComposite) {
+        flushTime();
+        setFinished(true);
+        return;
+      }
       advanceSection();
       return;
     }
     const id = setTimeout(() => setTimeLeft((t) => t - 1), 1000);
     return () => clearTimeout(id);
-  }, [timeLeft, finished, advanceSection]);
+  }, [timeLeft, finished, advanceSection, isComposite]);
 
   useEffect(() => {
     if (!toast) return;
@@ -2381,6 +2465,13 @@ function RunMockView({ mock, questions, onExit, challengeId }) {
     // section's time budget split evenly across its questions), not a fixed
     // number of seconds, so it stays meaningful across mocks of any length.
     function parTimeFor(sectionKey) {
+      // Composite mode has no enforced per-section time slice, so "fair
+      // pace" is the whole test's time spread evenly across every question
+      // in it, not this section's share of a divided-up clock.
+      if (isComposite) {
+        const totalQ = sections.reduce((sum, s) => sum + (questions[s.key]?.length || 0), 0);
+        return totalQ > 0 ? (mock.duration * 60) / totalQ : 60;
+      }
       return perSectionSeconds / ((questions[sectionKey] || []).length || 1);
     }
     function timeBadge(qq, sectionKey) {
@@ -2729,7 +2820,7 @@ function RunMockView({ mock, questions, onExit, challengeId }) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
         <div className="text-center bg-white border border-dashed border-slate-300 rounded-xl p-10 text-sm text-slate-400">
-          {section.label} has no questions yet — can't run this section.
+          {isComposite ? "This mock" : section?.label} has no questions yet — can't run this {isComposite ? "test" : "section"}.
           <div className="mt-4">
             <button onClick={onExit} className="text-sm px-4 py-2 rounded-md border border-slate-200 text-slate-600">
               Back
@@ -2753,7 +2844,7 @@ function RunMockView({ mock, questions, onExit, challengeId }) {
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
             <div className="text-sm font-semibold text-slate-800">{mock.title}</div>
-            <div className="text-xs text-slate-400">{section.label}</div>
+            <div className="text-xs text-slate-400">{currentSectionLabel}</div>
           </div>
           <div className="flex items-center gap-2">
             {!timerHidden && (
@@ -2772,21 +2863,38 @@ function RunMockView({ mock, questions, onExit, challengeId }) {
         </div>
         {sections.length > 1 && (
           <div className="flex gap-1.5 flex-wrap mt-3">
-            {sections.map((s, i) => (
-              <div
-                key={s.key}
-                title={i < sectionIdx ? "Locked — already submitted, cannot return" : undefined}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium border ${
-                  i === sectionIdx
-                    ? "bg-blue-900 text-white border-blue-900"
-                    : i < sectionIdx
-                    ? "bg-slate-100 text-slate-400 border-slate-200 line-through"
-                    : "bg-slate-50 text-slate-400 border-slate-200"
-                }`}
-              >
-                {s.label}
-              </div>
-            ))}
+            {sections.map((s, i) =>
+              isComposite ? (
+                // No lock in composite mode — every section tab is always
+                // clickable, jumping straight to that section's first
+                // question, matching the real exam's free navigation.
+                <button
+                  key={s.key}
+                  onClick={() => goToQuestion(sectionOffsets[s.key])}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-colors ${
+                    q?._sectionKey === s.key
+                      ? "bg-blue-900 text-white border-blue-900"
+                      : "bg-slate-50 text-slate-500 border-slate-200 hover:border-blue-300"
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ) : (
+                <div
+                  key={s.key}
+                  title={i < sectionIdx ? "Locked — already submitted, cannot return" : undefined}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium border ${
+                    i === sectionIdx
+                      ? "bg-blue-900 text-white border-blue-900"
+                      : i < sectionIdx
+                      ? "bg-slate-100 text-slate-400 border-slate-200 line-through"
+                      : "bg-slate-50 text-slate-400 border-slate-200"
+                  }`}
+                >
+                  {s.label}
+                </div>
+              )
+            )}
           </div>
         )}
       </div>
@@ -2870,9 +2978,11 @@ function RunMockView({ mock, questions, onExit, challengeId }) {
             </div>
 
             <div className="flex justify-center gap-3 mt-6">
-              <button onClick={requestNextSection} className="text-sm px-5 py-2.5 rounded-lg border border-slate-300 text-slate-600 bg-white">
-                {isLastSection ? "Finish exam" : `Next section: ${sections[sectionIdx + 1]?.label}`} →
-              </button>
+              {!isComposite && (
+                <button onClick={requestNextSection} className="text-sm px-5 py-2.5 rounded-lg border border-slate-300 text-slate-600 bg-white">
+                  {isLastSection ? "Finish exam" : `Next section: ${sections[sectionIdx + 1]?.label}`} →
+                </button>
+              )}
               <button onClick={requestFinish} className="text-sm px-5 py-2.5 rounded-lg bg-red-600 text-white font-medium">
                 Finish Test
               </button>
@@ -2883,7 +2993,7 @@ function RunMockView({ mock, questions, onExit, challengeId }) {
         {/* Question palette sidebar */}
         <div className="w-64 bg-white border-l border-slate-200 p-5 overflow-auto shrink-0">
           <div className="text-xs font-semibold text-slate-500 mb-3">
-            Question {qIdx + 1} / {list.length} · {section.label}
+            Question {qIdx + 1} / {list.length} · {currentSectionLabel}
           </div>
 
           <div className="grid grid-cols-2 gap-1.5 text-[11px] mb-4">
@@ -2893,22 +3003,56 @@ function RunMockView({ mock, questions, onExit, challengeId }) {
             <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-purple-500" /> Marked ({markedCount})</div>
           </div>
 
-          <div className="grid grid-cols-5 gap-2">
-            {list.map((qq, i) => {
-              const status = statusOf(qq);
-              return (
-                <button
-                  key={qq.id}
-                  onClick={() => goToQuestion(i)}
-                  className={`aspect-square rounded-md text-xs font-semibold border-2 ${STATUS_STYLE[status]} ${
-                    i === qIdx ? "ring-2 ring-offset-1 ring-blue-500" : ""
-                  }`}
-                >
-                  {i + 1}
-                </button>
-              );
-            })}
-          </div>
+          {isComposite ? (
+            // Grouped by section (for orientation) but every tile is always
+            // clickable — no lock, matching the real exam's free navigation.
+            <div className="space-y-4">
+              {sections.map((s) => {
+                const sectionQs = questions[s.key] || [];
+                if (sectionQs.length === 0) return null;
+                const offset = sectionOffsets[s.key];
+                return (
+                  <div key={s.key}>
+                    <div className="text-[11px] font-semibold text-slate-500 mb-1.5">{s.label}</div>
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {sectionQs.map((qq, i) => {
+                        const globalI = offset + i;
+                        const status = statusOf(qq);
+                        return (
+                          <button
+                            key={qq.id}
+                            onClick={() => goToQuestion(globalI)}
+                            className={`aspect-square rounded-md text-xs font-semibold border-2 ${STATUS_STYLE[status]} ${
+                              globalI === qIdx ? "ring-2 ring-offset-1 ring-blue-500" : ""
+                            }`}
+                          >
+                            {globalI + 1}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="grid grid-cols-5 gap-2">
+              {list.map((qq, i) => {
+                const status = statusOf(qq);
+                return (
+                  <button
+                    key={qq.id}
+                    onClick={() => goToQuestion(i)}
+                    className={`aspect-square rounded-md text-xs font-semibold border-2 ${STATUS_STYLE[status]} ${
+                      i === qIdx ? "ring-2 ring-offset-1 ring-blue-500" : ""
+                    }`}
+                  >
+                    {i + 1}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 
@@ -3433,8 +3577,14 @@ function StudentInstructionsView({ mock, questionCount, onStart, onBack, viaChal
             <p className="whitespace-pre-line">{mock.instructions}</p>
           ) : (
             <ul className="list-disc pl-5 space-y-1 text-slate-500">
-              <li>Each section has its own timer. Once time is up, you'll automatically move to the next section.</li>
-              <li>Once you leave a section, you cannot return to it.</li>
+              {getExam(mock).timerMode === "composite" ? (
+                <li>One timer for the whole test — you can move freely between any section's questions the entire time, in any order.</li>
+              ) : (
+                <>
+                  <li>Each section has its own timer. Once time is up, you'll automatically move to the next section.</li>
+                  <li>Once you leave a section, you cannot return to it.</li>
+                </>
+              )}
               <li>{mock.negativeMarking > 0 ? `Negative marking: ${mock.negativeMarking} mark(s) deducted per wrong answer.` : "No negative marking — attempt every question."}</li>
               <li>You can finish the test at any time using "Finish Test".</li>
             </ul>
@@ -4213,25 +4363,56 @@ function StudentApp() {
 
   if (view === "exam") {
     return (
-      <div className="min-h-screen bg-slate-50">
-        <header className="bg-white border-b border-slate-200 px-6 py-4">
-          <h1 className="text-base font-semibold text-slate-800">The 100 Percentiler — Mock Tests</h1>
-          <p className="text-xs text-slate-400">{publishedMocks.length} test{publishedMocks.length === 1 ? "" : "s"} available</p>
-        </header>
-        <main className="p-6 max-w-3xl mx-auto">
-          <p className="text-sm text-slate-500 mb-5">Which exam are you preparing for?</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50">
+        <div className="relative overflow-hidden bg-gradient-to-br from-blue-950 via-blue-900 to-indigo-900 text-white px-6 py-16 sm:py-20">
+          <div className="absolute -right-20 -top-20 w-80 h-80 bg-blue-400/20 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -left-16 -bottom-20 w-72 h-72 bg-indigo-400/20 rounded-full blur-3xl pointer-events-none" />
+          <div className="relative max-w-5xl mx-auto text-center">
+            <div className="inline-flex items-center gap-1.5 bg-white/10 backdrop-blur text-blue-100 text-xs font-medium px-3 py-1.5 rounded-full mb-5">
+              <Sparkles size={13} /> The 100 Percentiler
+            </div>
+            <h1 className="text-2xl sm:text-4xl font-bold mb-3">Which exam are you preparing for?</h1>
+            <p className="text-sm sm:text-base text-blue-200">
+              {publishedMocks.length} mock test{publishedMocks.length === 1 ? "" : "s"} live and ready — pick your exam to get started.
+            </p>
+          </div>
+        </div>
+
+        <main className="max-w-5xl mx-auto px-6 -mt-10 pb-16 relative">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {EXAM_LIST.map((exam) => {
+              const theme = EXAM_THEME[exam.key];
+              const Icon = theme.icon;
               const count = publishedMocks.filter((m) => getExamKey(m) === exam.key).length;
               return (
                 <button
                   key={exam.key}
                   onClick={() => chooseExam(exam.key)}
-                  className="bg-white border border-slate-200 rounded-2xl p-8 text-left hover:border-blue-300 hover:shadow-sm transition-all"
+                  className={`group relative bg-white border border-slate-200 rounded-3xl p-7 text-left shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden ${theme.ring}`}
                 >
-                  <h2 className="text-lg font-semibold text-slate-800 mb-1">{exam.label}</h2>
-                  <p className="text-sm text-slate-500 mb-4">{exam.tagline}</p>
-                  <span className="text-sm font-medium text-blue-800">{count} test{count === 1 ? "" : "s"} available →</span>
+                  <div className={`absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r ${theme.gradient}`} />
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 ${theme.iconBg}`}>
+                    <Icon size={22} />
+                  </div>
+                  <h2 className="text-lg font-bold text-slate-800 mb-1.5">{exam.label}</h2>
+                  <p className="text-sm text-slate-500 mb-5 leading-relaxed">{exam.tagline}</p>
+                  <div className="flex flex-wrap gap-1.5 mb-5">
+                    {exam.sections.map((s) => (
+                      <span key={s.key} className="text-[10px] font-semibold px-2 py-1 rounded-full bg-slate-100 text-slate-500">
+                        {s.short}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${theme.badgeBg}`}>
+                      {count} test{count === 1 ? "" : "s"} available
+                    </span>
+                    <span
+                      className={`inline-flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br ${theme.gradient} text-white group-hover:scale-110 transition-transform`}
+                    >
+                      <ArrowRight size={15} />
+                    </span>
+                  </div>
                 </button>
               );
             })}
