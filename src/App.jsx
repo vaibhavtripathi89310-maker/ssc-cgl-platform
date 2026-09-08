@@ -15,6 +15,7 @@ import {
   loadAttemptsInRange,
 } from "./lib/storage";
 import { signIn, signOut, getSession, onAuthStateChange } from "./lib/auth";
+import { analyzeAttempt } from "./lib/aiAnalysis";
 import { getDeviceId } from "./lib/device";
 import {
   ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -2201,7 +2202,7 @@ function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight) {
 // questions. Distinct from PreviewView: no answers shown, real countdown per
 // section, auto-advances when time is up, gives a score at the end.
 // ============================================================================
-function RunMockView({ mock, questions, onExit, challengeId }) {
+function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }) {
   const [sectionIdx, setSectionIdx] = useState(0);
   const [qIdx, setQIdx] = useState(0);
   const [answers, setAnswers] = useState({}); // questionId -> optionIndex
@@ -2553,6 +2554,28 @@ function RunMockView({ mock, questions, onExit, challengeId }) {
             onExit={onExit}
             onJumpReview={jumpToReview}
           />
+
+          {/* AI PERFORMANCE ANALYSIS — admin-only, never shown to students.
+              Only rendered when RunMockView is reached via the admin panel's
+              own "Run" flow (adminMode=true), never from StudentApp. */}
+          {adminMode && (
+            <AIAnalysisPanel
+              mock={mock}
+              sections={sections}
+              questions={questions}
+              answers={answers}
+              timeSpent={timeSpent}
+              topicRows={topicRows}
+              weakTopics={weakTopics}
+              strongTopics={strongTopics}
+              sectionBreakdown={sectionBreakdown}
+              score={score}
+              correct={correct}
+              incorrect={incorrect}
+              skipped={skipped}
+              parTimeFor={parTimeFor}
+            />
+          )}
 
           {/* QUESTION ANALYSIS — one unified, interactive card. Subject
               accuracy, pace, and the full per-question review used to be
@@ -3415,7 +3438,7 @@ function AdminPanel() {
             <PreviewView mock={activeMock} questions={activeQuestions} />
           )}
           {view === "run" && activeMock && activeQuestions && (
-            <RunMockView mock={activeMock} questions={activeQuestions} onExit={goList} />
+            <RunMockView mock={activeMock} questions={activeQuestions} onExit={goList} adminMode />
           )}
         </main>
       </div>
@@ -3909,6 +3932,201 @@ function ResultsHero({ mock, score, correct, incorrect, skipped, percentile, sec
           Back to admin panel
         </button>
       </div>
+    </div>
+  );
+}
+
+// AI PERFORMANCE ANALYSIS — admin-only. Packages this attempt's full
+// per-question detail (only for questions that need explaining: wrong,
+// skipped, or correct-but-slow — no need to send every correct-and-quick
+// answer) and sends it to api/analyze-attempt, which asks Gemini's free
+// tier for a structured, plain-English breakdown. Never reachable from the
+// student-facing results screen — see the adminMode gate in RunMockView.
+function buildAnalysisPayload({ mock, sections, questions, answers, timeSpent, topicRows, weakTopics, strongTopics, sectionBreakdown, score, correct, incorrect, skipped, parTimeFor }) {
+  const problemQuestions = [];
+  const slowCorrectQuestions = [];
+  sections.forEach((s) => {
+    (questions[s.key] || []).forEach((qq) => {
+      const sel = answers[qq.id];
+      const t = timeSpent[qq.id] || 0;
+      const par = parTimeFor(s.key);
+      const isSkipped = sel === undefined;
+      const isCorrect = !isSkipped && sel === qq.answer;
+      const pace = t === 0 ? "not visited" : t <= par * 0.5 ? "quick" : t <= par * 1.5 ? "normal" : "slow";
+      if (!isCorrect) {
+        problemQuestions.push({
+          section: s.label,
+          topic: qq.topic || s.label,
+          questionText: qq.text,
+          options: qq.options,
+          correctAnswerText: qq.options[qq.answer],
+          selectedAnswerText: isSkipped ? null : qq.options[sel],
+          status: isSkipped ? "skipped" : "incorrect",
+          timeSpentSeconds: t,
+          parTimeSeconds: Math.round(par),
+          pace,
+          explanation: qq.explanation || "",
+        });
+      } else if (pace === "slow") {
+        slowCorrectQuestions.push({
+          section: s.label,
+          topic: qq.topic || s.label,
+          questionText: qq.text,
+          timeSpentSeconds: t,
+          parTimeSeconds: Math.round(par),
+        });
+      }
+    });
+  });
+  return {
+    examLabel: getExam(mock).label,
+    mockTitle: mock.title,
+    totalMarks: mock.totalMarks,
+    score, correct, incorrect, skipped,
+    sectionBreakdown, topicRows, weakTopics, strongTopics,
+    problemQuestions, slowCorrectQuestions,
+  };
+}
+
+function AIAnalysisPanel(props) {
+  const [state, setState] = useState("idle"); // 'idle' | 'loading' | 'done' | 'error'
+  const [result, setResult] = useState(null);
+  const [errorMsg, setErrorMsg] = useState("");
+
+  async function runAnalysis() {
+    setState("loading");
+    setErrorMsg("");
+    try {
+      const payload = buildAnalysisPayload(props);
+      const data = await analyzeAttempt(payload);
+      setResult(data);
+      setState("done");
+    } catch (err) {
+      setErrorMsg(err.message || "Something went wrong.");
+      setState("error");
+    }
+  }
+
+  return (
+    <div className="bg-white border border-indigo-100 rounded-2xl p-6 shadow-sm">
+      <div className="flex items-center gap-2 mb-1">
+        <Sparkles size={16} className="text-indigo-600" />
+        <h2 className="text-sm font-semibold text-slate-800">AI Performance Analysis</h2>
+        <span className="text-[10px] font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">Admin only</span>
+      </div>
+      <p className="text-xs text-slate-500 mb-4">
+        A detailed, plain-English breakdown of this attempt — mistakes, weak/strong topics, and where time was lost.
+      </p>
+
+      {state === "idle" && (
+        <button
+          onClick={runAnalysis}
+          className="inline-flex items-center gap-2 bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
+        >
+          <Sparkles size={14} /> Analyze with AI
+        </button>
+      )}
+
+      {state === "loading" && (
+        <div className="flex items-center gap-2 text-sm text-slate-500">
+          <div className="w-4 h-4 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin" />
+          Analyzing this attempt — this can take up to a minute...
+        </div>
+      )}
+
+      {state === "error" && (
+        <div className="text-sm text-red-600">
+          {errorMsg}
+          <button onClick={runAnalysis} className="ml-3 text-indigo-600 font-medium underline">
+            Try again
+          </button>
+        </div>
+      )}
+
+      {state === "done" && result && (
+        <div className="space-y-5 animate-fade-slide">
+          <p className="text-sm text-slate-700 leading-relaxed">{result.overallSummary}</p>
+
+          {result.mistakePatterns?.length > 0 && (
+            <div>
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Where you went wrong</h3>
+              <div className="space-y-2">
+                {result.mistakePatterns.map((m, i) => (
+                  <div key={i} className="bg-red-50 border border-red-100 rounded-lg p-3">
+                    <div className="text-sm font-medium text-red-800">
+                      {m.topic}{" "}
+                      <span className="text-xs font-normal text-red-500">
+                        ({m.questionsAffected} question{m.questionsAffected === 1 ? "" : "s"})
+                      </span>
+                    </div>
+                    <div className="text-xs text-red-700 mt-1">{m.whatWentWrong}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {result.weakTopics?.length > 0 && (
+            <div>
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Topics to focus on</h3>
+              <div className="space-y-2">
+                {result.weakTopics.map((w, i) => (
+                  <div key={i} className="bg-amber-50 border border-amber-100 rounded-lg p-3">
+                    <div className="text-sm font-medium text-amber-800">{w.topic}</div>
+                    <div className="text-xs text-amber-700 mt-1">{w.why}</div>
+                    <div className="text-xs text-amber-900 mt-1.5">
+                      <span className="font-medium">How to fix:</span> {w.howToFix}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {result.strongTopics?.length > 0 && (
+            <div>
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">What's working</h3>
+              <div className="space-y-2">
+                {result.strongTopics.map((s, i) => (
+                  <div key={i} className="bg-emerald-50 border border-emerald-100 rounded-lg p-3">
+                    <div className="text-sm font-medium text-emerald-800">{s.topic}</div>
+                    <div className="text-xs text-emerald-700 mt-1">{s.why}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {result.timeManagement?.length > 0 && (
+            <div>
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Time management</h3>
+              <ul className="list-disc list-inside space-y-1 text-xs text-slate-600">
+                {result.timeManagement.map((t, i) => (
+                  <li key={i}>{t}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {result.focusPlan?.length > 0 && (
+            <div>
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Your focus plan</h3>
+              <ul className="space-y-1.5">
+                {result.focusPlan.map((f, i) => (
+                  <li key={i} className="flex items-start gap-2 text-sm text-slate-700">
+                    <CheckCircle2 size={14} className="text-indigo-500 mt-0.5 shrink-0" />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <button onClick={runAnalysis} className="text-xs text-indigo-600 font-medium">
+            Re-run analysis →
+          </button>
+        </div>
+      )}
     </div>
   );
 }
