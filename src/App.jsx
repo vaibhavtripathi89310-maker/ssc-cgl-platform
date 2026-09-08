@@ -2492,6 +2492,18 @@ function RunMockView({ mock, questions, onExit, challengeId }) {
       if (t <= par * 1.5) return "bg-amber-100 text-amber-700 border-amber-200";
       return "bg-red-100 text-red-700 border-red-200";
     }
+    // Same pace judgment as timeBadge, but as a {cls, label} pair for
+    // AnswerReviewCard, which shows the time verdict inline with the
+    // question instead of in a separate section.
+    function timeInfoFor(qq, sectionKey) {
+      const t = timeSpent[qq.id] || 0;
+      const par = parTimeFor(sectionKey);
+      const cls = timeBadge(qq, sectionKey);
+      if (t === 0) return { cls, label: "Not visited" };
+      if (t <= par * 0.5) return { cls, label: `${formatTime(t)} · Quick` };
+      if (t <= par * 1.5) return { cls, label: `${formatTime(t)} · Normal` };
+      return { cls, label: `${formatTime(t)} · Slow` };
+    }
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 py-8 px-4 sm:px-8">
@@ -2552,238 +2564,218 @@ function RunMockView({ mock, questions, onExit, challengeId }) {
           {/* SECTION PERFORMANCE — interactive pie, right below the score */}
           <SectionPerformancePicker sections={sections} sectionBreakdown={sectionBreakdown} />
 
-          {/* Share / Challenge / Leaderboard / Cutoffs */}
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
-            <ShareResultCard mock={mock} score={score} totalMarks={mock.totalMarks} examLabel={getExam(mock).label} />
+          {/* QUESTION ANALYSIS — one unified, interactive card. Subject
+              accuracy, pace, and the full per-question review used to be
+              three disconnected sections (with "time analysis" oddly
+              standalone from the questions it was timing); now it's one
+              scannable flow, with time folded directly into each review row
+              instead of living apart from the question it describes. */}
+          <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+            <div className="p-6 sm:p-8">
+              <h2 className="text-lg font-bold text-slate-800 mb-1">Question Analysis</h2>
+              <p className="text-sm text-slate-500 mb-5">Where you're strong, where to focus, and how you paced yourself — this mock only.</p>
 
-            {challengeId ? (
-              <div className="bg-white border border-slate-200 rounded-2xl p-5 text-center">
-                <Swords size={20} className="mx-auto mb-2 text-blue-700" />
-                <h3 className="text-sm font-semibold text-slate-700 mb-1">
-                  {challengeClaim === "taken" ? "This challenge was already completed" : "Challenge accepted!"}
-                </h3>
-                <p className="text-xs text-slate-500 mb-4">
-                  {challengeClaim === "taken"
-                    ? "Someone else already finished this challenge first — your attempt was still saved, just not linked to it."
-                    : "See the full side-by-side answer sheet with whoever sent you this."}
-                </p>
-                {challengeClaim === "claimed" && (
-                  <a href={`/challenge/${challengeId}`} className="inline-block bg-blue-900 text-white text-sm font-medium px-4 py-2 rounded-lg">
-                    View comparison →
-                  </a>
-                )}
-              </div>
-            ) : (
-              <div className="bg-white border border-slate-200 rounded-2xl p-5">
-                <h3 className="text-sm font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
-                  <Swords size={15} className="text-blue-700" /> Challenge a friend
-                </h3>
-                <p className="text-xs text-slate-400 mb-3">
-                  Send this exact mock to a friend — once they finish, you'll both see a full side-by-side answer sheet.
-                </p>
-                {myChallengeLink ? (
-                  <div className="flex items-center gap-2">
-                    <input
-                      readOnly
-                      value={myChallengeLink}
-                      onClick={(e) => e.target.select()}
-                      className="flex-1 text-xs border border-slate-200 rounded-md px-3 py-2 text-slate-600"
-                    />
-                    <button
-                      onClick={() => navigator.clipboard?.writeText(myChallengeLink)}
-                      className="shrink-0 text-xs px-3 py-2 rounded-md border border-slate-200 text-slate-600"
-                      title="Copy link"
-                    >
-                      <Link2 size={13} />
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={handleChallengeAFriend}
-                    disabled={!myAttemptId}
-                    className="w-full flex items-center justify-center gap-2 bg-blue-900 text-white text-sm font-medium py-2.5 rounded-lg disabled:opacity-50"
-                  >
-                    <Swords size={15} /> Create Challenge Link
-                  </button>
-                )}
-              </div>
-            )}
-
-            {leaderboard.length > 0 && (
-              <div className="bg-white border border-slate-200 rounded-2xl p-5 text-left">
-                <h3 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-1.5">
-                  <Trophy size={15} className="text-amber-500" /> Top scores for this mock
-                </h3>
-                <div className="space-y-1.5">
-                  {leaderboard.map((row, i) => (
-                    <div
-                      key={row.id}
-                      className={`flex items-center justify-between text-xs rounded-md px-3 py-2 ${
-                        row.id === myAttemptId ? "bg-blue-50 border border-blue-200" : "bg-slate-50"
-                      }`}
-                    >
-                      <span className={row.id === myAttemptId ? "font-semibold text-blue-800" : "text-slate-600"}>
-                        #{i + 1}{row.id === myAttemptId ? " · You" : ""}
-                      </span>
-                      <span className="font-medium text-slate-800">{row.score}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {cutoffs.length > 0 && (
-              <div className="bg-white border border-slate-200 rounded-2xl p-5 text-left">
-                <h3 className="text-sm font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
-                  <BarChart2 size={15} className="text-blue-700" /> Your score vs. past cutoffs
-                </h3>
-                <p className="text-xs text-slate-400 mb-3">How {score} compares to recent years' actual SSC CGL cutoffs.</p>
-                <div className="space-y-1.5">
-                  {cutoffs.slice(0, 5).map((c) => {
-                    const cleared = score >= c.cutoff;
-                    return (
-                      <div key={c.id} className="flex items-center justify-between text-xs bg-slate-50 rounded-md px-3 py-2">
-                        <div>
-                          <div className="text-slate-700 font-medium">{c.year}</div>
-                          <div className="text-slate-400">Cutoff: {c.cutoff}</div>
-                        </div>
-                        <span
-                          className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
-                            cleared ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"
-                          }`}
-                        >
-                          {cleared ? "Would clear" : "Below cutoff"}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-6">
-            <div className="bg-white border border-slate-200 rounded-2xl p-6 text-left shadow-sm">
-              <h3 className="text-sm font-semibold text-slate-700 mb-1">Time analysis</h3>
-              <p className="text-xs text-slate-400 mb-4">How long you spent on each question, compared to a fair pace for this test.</p>
-              <div className="flex items-center gap-3 text-[11px] text-slate-500 mb-4 flex-wrap">
-                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-emerald-100 border border-emerald-200" /> Quick</span>
-                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-amber-100 border border-amber-200" /> Normal pace</span>
-                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-red-100 border border-red-200" /> Took long</span>
-              </div>
-              {sections.map((s) => {
-                const sList = questions[s.key] || [];
-                if (sList.length === 0) return null;
-                return (
-                  <div key={s.key} className="mb-4 last:mb-0">
-                    {sections.length > 1 && <div className="text-xs font-medium text-slate-500 mb-2">{s.label}</div>}
-                    <div className="grid grid-cols-5 sm:grid-cols-10 lg:grid-cols-12 gap-2">
-                      {sList.map((qq, i) => (
-                        <div
-                          key={qq.id}
-                          title={`${s.label} · Q${i + 1} — ${formatTime(timeSpent[qq.id] || 0)}`}
-                          className={`rounded-md border text-center py-1.5 ${timeBadge(qq, s.key)}`}
-                        >
-                          <div className="text-[10px] font-semibold">{i + 1}</div>
-                          <div className="text-[10px]">{formatTime(timeSpent[qq.id] || 0)}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="bg-white border border-slate-200 rounded-2xl p-6 text-left shadow-sm">
-              <h3 className="text-sm font-semibold text-slate-700 mb-1">Topic-wise performance</h3>
-              <p className="text-xs text-slate-400 mb-4">Where to focus your revision, based on this attempt — this mock only.</p>
               {weakTopics.length > 0 && (
                 <div className="bg-red-50 border border-red-200 rounded-md px-3 py-2 text-xs text-red-700 mb-2">
                   📌 Focus your revision on: <span className="font-medium">{weakTopics.join(", ")}</span>
                 </div>
               )}
               {strongTopics.length > 0 && (
-                <div className="bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2 text-xs text-emerald-700 mb-4">
+                <div className="bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2 text-xs text-emerald-700 mb-5">
                   ✅ You're doing well in: <span className="font-medium">{strongTopics.join(", ")}</span>
                 </div>
               )}
-              <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+
+              <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6">
                 <div className="lg:col-span-3">
+                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Subject-wise accuracy</h3>
                   <SubjectAccuracyChart
                     sectionAccuracy={topicRows.map((t) => ({ label: t.topic, correct: t.correct, total: t.total, accuracy: t.accuracy }))}
                   />
                 </div>
                 <div className="lg:col-span-2">
+                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Correct / Incorrect / Skipped</h3>
                   <AnswerBreakdownDonut attempts={[{ correct, incorrect, skipped }]} caption="questions in this mock" />
                 </div>
               </div>
-            </div>
 
-            <div ref={reviewSectionRef} className="flex items-center justify-between px-1">
-              <h3 className="text-sm font-semibold text-slate-700">
-                Answer review{reviewFilter !== "all" ? ` — ${reviewFilter} only` : ""}
-              </h3>
-              {reviewFilter !== "all" && (
-                <button onClick={() => setReviewFilter("all")} className="text-xs text-blue-700 font-medium">
-                  Show all →
-                </button>
-              )}
-            </div>
-            <div className="space-y-4">
-              {sections
-                .flatMap((s) => (questions[s.key] || []).map((qq, i) => ({ s, qq, i })))
-                .filter(({ qq }) => {
-                  const sel = answers[qq.id];
-                  if (reviewFilter === "all") return true;
-                  if (reviewFilter === "skipped") return sel === undefined;
-                  if (reviewFilter === "correct") return sel === qq.answer;
-                  return sel !== undefined && sel !== qq.answer; // 'incorrect'
-                })
-                .map(({ s, qq, i }) => {
-                  const sel = answers[qq.id];
-                  const isCorrect = sel === qq.answer;
-                  const isSkipped = sel === undefined;
+              <div className="border-t border-slate-100 pt-5 mb-6">
+                <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Pace at a glance</h3>
+                <div className="flex items-center gap-3 text-[11px] text-slate-500 mb-3 flex-wrap">
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-100 border border-emerald-200" /> Quick</span>
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-amber-100 border border-amber-200" /> Normal</span>
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-red-100 border border-red-200" /> Slow</span>
+                </div>
+                {sections.map((s) => {
+                  const sList = questions[s.key] || [];
+                  if (sList.length === 0) return null;
                   return (
-                    <div key={qq.id} className="bg-white border border-slate-200 rounded-xl p-5 text-left">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs text-slate-400">{s.label} · Q{i + 1}</span>
-                        <span
-                          className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                            isSkipped ? "bg-slate-100 text-slate-500" : isCorrect ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"
-                          }`}
-                        >
-                          {isSkipped ? "Skipped" : isCorrect ? "Correct" : "Incorrect"}
-                        </span>
+                    <div key={s.key} className="mb-3 last:mb-0">
+                      {sections.length > 1 && <div className="text-[11px] font-medium text-slate-400 mb-1.5">{s.label}</div>}
+                      <div className="grid grid-cols-8 sm:grid-cols-12 lg:grid-cols-[repeat(16,minmax(0,1fr))] gap-1.5">
+                        {sList.map((qq, i) => (
+                          <div
+                            key={qq.id}
+                            title={`${s.label} · Q${i + 1} — ${formatTime(timeSpent[qq.id] || 0)}`}
+                            className={`rounded text-center text-[10px] font-semibold py-1 border ${timeBadge(qq, s.key)}`}
+                          >
+                            {i + 1}
+                          </div>
+                        ))}
                       </div>
-                      <p className="text-sm text-slate-800 mb-3"><MathText text={qq.text} /></p>
-                      <div className="space-y-1.5">
-                        {qq.options.map((opt, oi) => {
-                          const isYourPick = sel === oi;
-                          const isRightAnswer = qq.answer === oi;
-                          return (
-                            <div
-                              key={oi}
-                              className={`text-sm px-3 py-2 rounded-md border ${
-                                isRightAnswer
-                                  ? "border-emerald-400 bg-emerald-50 text-emerald-800"
-                                  : isYourPick
-                                  ? "border-red-300 bg-red-50 text-red-700"
-                                  : "border-slate-200 text-slate-600"
-                              }`}
-                            >
-                              {LETTERS[oi]}. <MathText text={opt} />
-                              {isRightAnswer && <span className="ml-2 text-xs font-medium">✓ Correct answer</span>}
-                              {isYourPick && !isRightAnswer && <span className="ml-2 text-xs font-medium">Your answer</span>}
-                            </div>
-                          );
-                        })}
-                      </div>
-                      {qq.explanation && (
-                        <p className="text-xs text-slate-500 mt-3 italic"><MathText text={qq.explanation} /></p>
-                      )}
                     </div>
                   );
                 })}
+              </div>
+
+              <div className="border-t border-slate-100 pt-5">
+                <div ref={reviewSectionRef} className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                    Answer review{reviewFilter !== "all" ? ` — ${reviewFilter} only` : ""}
+                  </h3>
+                  {reviewFilter !== "all" && (
+                    <button onClick={() => setReviewFilter("all")} className="text-xs text-blue-700 font-medium">
+                      Show all →
+                    </button>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  {sections
+                    .flatMap((s) => (questions[s.key] || []).map((qq, i) => ({ s, qq, i })))
+                    .filter(({ qq }) => {
+                      const sel = answers[qq.id];
+                      if (reviewFilter === "all") return true;
+                      if (reviewFilter === "skipped") return sel === undefined;
+                      if (reviewFilter === "correct") return sel === qq.answer;
+                      return sel !== undefined && sel !== qq.answer; // 'incorrect'
+                    })
+                    .map(({ s, qq, i }) => (
+                      <AnswerReviewCard
+                        key={qq.id}
+                        qq={qq}
+                        sectionLabel={s.label}
+                        qNumber={i + 1}
+                        sel={answers[qq.id]}
+                        timeInfo={timeInfoFor(qq, s.key)}
+                      />
+                    ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* SHARE & COMPETE — secondary to the analysis above (that's the
+              point of the page), and laid out so it never leaves empty grid
+              cells regardless of how many of these cards exist. */}
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
+            <div className="lg:col-span-3">
+              <ShareResultCard mock={mock} score={score} totalMarks={mock.totalMarks} examLabel={getExam(mock).label} />
+            </div>
+            <div className="lg:col-span-2 space-y-4">
+              {challengeId ? (
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 text-center">
+                  <Swords size={20} className="mx-auto mb-2 text-blue-700" />
+                  <h3 className="text-sm font-semibold text-slate-700 mb-1">
+                    {challengeClaim === "taken" ? "This challenge was already completed" : "Challenge accepted!"}
+                  </h3>
+                  <p className="text-xs text-slate-500 mb-4">
+                    {challengeClaim === "taken"
+                      ? "Someone else already finished this challenge first — your attempt was still saved, just not linked to it."
+                      : "See the full side-by-side answer sheet with whoever sent you this."}
+                  </p>
+                  {challengeClaim === "claimed" && (
+                    <a href={`/challenge/${challengeId}`} className="inline-block bg-blue-900 text-white text-sm font-medium px-4 py-2 rounded-lg">
+                      View comparison →
+                    </a>
+                  )}
+                </div>
+              ) : (
+                <div className="bg-white border border-slate-200 rounded-2xl p-5">
+                  <h3 className="text-sm font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
+                    <Swords size={15} className="text-blue-700" /> Challenge a friend
+                  </h3>
+                  <p className="text-xs text-slate-400 mb-3">
+                    Send this exact mock to a friend — once they finish, you'll both see a full side-by-side answer sheet.
+                  </p>
+                  {myChallengeLink ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        readOnly
+                        value={myChallengeLink}
+                        onClick={(e) => e.target.select()}
+                        className="flex-1 text-xs border border-slate-200 rounded-md px-3 py-2 text-slate-600"
+                      />
+                      <button
+                        onClick={() => navigator.clipboard?.writeText(myChallengeLink)}
+                        className="shrink-0 text-xs px-3 py-2 rounded-md border border-slate-200 text-slate-600"
+                        title="Copy link"
+                      >
+                        <Link2 size={13} />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={handleChallengeAFriend}
+                      disabled={!myAttemptId}
+                      className="w-full flex items-center justify-center gap-2 bg-blue-900 text-white text-sm font-medium py-2.5 rounded-lg disabled:opacity-50"
+                    >
+                      <Swords size={15} /> Create Challenge Link
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {leaderboard.length > 0 && (
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 text-left">
+                  <h3 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-1.5">
+                    <Trophy size={15} className="text-amber-500" /> Top scores for this mock
+                  </h3>
+                  <div className="space-y-1.5">
+                    {leaderboard.map((row, i) => (
+                      <div
+                        key={row.id}
+                        className={`flex items-center justify-between text-xs rounded-md px-3 py-2 ${
+                          row.id === myAttemptId ? "bg-blue-50 border border-blue-200" : "bg-slate-50"
+                        }`}
+                      >
+                        <span className={row.id === myAttemptId ? "font-semibold text-blue-800" : "text-slate-600"}>
+                          #{i + 1}{row.id === myAttemptId ? " · You" : ""}
+                        </span>
+                        <span className="font-medium text-slate-800">{row.score}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {cutoffs.length > 0 && (
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 text-left">
+                  <h3 className="text-sm font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
+                    <BarChart2 size={15} className="text-blue-700" /> Your score vs. past cutoffs
+                  </h3>
+                  <p className="text-xs text-slate-400 mb-3">How {score} compares to recent years' actual SSC CGL cutoffs.</p>
+                  <div className="space-y-1.5">
+                    {cutoffs.slice(0, 5).map((c) => {
+                      const cleared = score >= c.cutoff;
+                      return (
+                        <div key={c.id} className="flex items-center justify-between text-xs bg-slate-50 rounded-md px-3 py-2">
+                          <div>
+                            <div className="text-slate-700 font-medium">{c.year}</div>
+                            <div className="text-slate-400">Cutoff: {c.cutoff}</div>
+                          </div>
+                          <span
+                            className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
+                              cleared ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"
+                            }`}
+                          >
+                            {cleared ? "Would clear" : "Below cutoff"}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -3884,6 +3876,75 @@ function SectionPerformancePicker({ sections, sectionBreakdown }) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// One row of Answer Review — collapsed by default (section, a one-line
+// preview of the question, correctness, and time-spent all in one glance),
+// expanding to the full question/options/explanation on click. Time is
+// folded directly into this row rather than living in its own separate
+// section, since "how long did I take on this one" and "did I get this one
+// right" are really the same question about the same question.
+function AnswerReviewCard({ qq, sectionLabel, qNumber, sel, timeInfo }) {
+  const [expanded, setExpanded] = useState(false);
+  const isCorrect = sel === qq.answer;
+  const isSkipped = sel === undefined;
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden hover:border-slate-300 transition-colors">
+      <button onClick={() => setExpanded((e) => !e)} className="w-full flex items-center gap-3 px-4 py-3 text-left">
+        <span className="hidden sm:inline text-xs text-slate-400 shrink-0 whitespace-nowrap">
+          {sectionLabel} · Q{qNumber}
+        </span>
+        <span className="sm:hidden text-xs text-slate-400 shrink-0">Q{qNumber}</span>
+        <span className="flex-1 min-w-0 text-sm text-slate-700 truncate">
+          <MathText text={qq.text} />
+        </span>
+        <span
+          className={`shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+            isSkipped ? "bg-slate-100 text-slate-500" : isCorrect ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"
+          }`}
+        >
+          {isSkipped ? "Skipped" : isCorrect ? "Correct" : "Incorrect"}
+        </span>
+        <span className={`hidden md:inline-block shrink-0 text-[11px] font-medium px-2 py-0.5 rounded-full border ${timeInfo.cls}`}>
+          {timeInfo.label}
+        </span>
+        <ChevronDown size={16} className={`shrink-0 text-slate-400 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`} />
+      </button>
+      {expanded && (
+        <div className="px-5 pb-5 pt-1 border-t border-slate-100 text-left">
+          <span className={`md:hidden inline-block mb-3 text-[11px] font-medium px-2 py-0.5 rounded-full border ${timeInfo.cls}`}>
+            {timeInfo.label}
+          </span>
+          <p className="text-sm text-slate-800 mb-3"><MathText text={qq.text} /></p>
+          <div className="space-y-1.5">
+            {qq.options.map((opt, oi) => {
+              const isYourPick = sel === oi;
+              const isRightAnswer = qq.answer === oi;
+              return (
+                <div
+                  key={oi}
+                  className={`text-sm px-3 py-2 rounded-md border ${
+                    isRightAnswer
+                      ? "border-emerald-400 bg-emerald-50 text-emerald-800"
+                      : isYourPick
+                      ? "border-red-300 bg-red-50 text-red-700"
+                      : "border-slate-200 text-slate-600"
+                  }`}
+                >
+                  {LETTERS[oi]}. <MathText text={opt} />
+                  {isRightAnswer && <span className="ml-2 text-xs font-medium">✓ Correct answer</span>}
+                  {isYourPick && !isRightAnswer && <span className="ml-2 text-xs font-medium">Your answer</span>}
+                </div>
+              );
+            })}
+          </div>
+          {qq.explanation && (
+            <p className="text-xs text-slate-500 mt-3 italic"><MathText text={qq.explanation} /></p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
