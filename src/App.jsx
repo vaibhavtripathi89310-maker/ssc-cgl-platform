@@ -361,6 +361,34 @@ function formatTime(totalSec) {
   const s = Math.floor(totalSec % 60).toString().padStart(2, "0");
   return `${m}:${s}`;
 }
+
+// A short, quiet synthesized "tick" for deliberate clicks on interactive
+// results-screen elements (tab switches, etc.) — generated in-browser via
+// the Web Audio API rather than an embedded/hosted audio file, so there's
+// no asset to load and nothing to fail if a browser blocks it. One shared
+// AudioContext is reused across calls rather than creating a new one per
+// click (browsers cap how many can exist at once).
+let sharedAudioCtx = null;
+function playClickSound() {
+  try {
+    if (!sharedAudioCtx) sharedAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = sharedAudioCtx;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.08);
+    gain.gain.setValueAtTime(0.07, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.12);
+  } catch {
+    // Web Audio unsupported or blocked (e.g. autoplay policy) — sound is a
+    // nice-to-have, never worth breaking the click itself over.
+  }
+}
 const nextMockNumber = (list) => (list.length ? Math.max(...list.map((m) => m.mockNumber || 0)) + 1 : 1);
 const sectionLabel = (key) => ALL_SECTIONS.find((s) => s.key === key)?.label || key;
 const emptySectionMap = () => Object.fromEntries(ALL_SECTIONS.map((s) => [s.key, []]));
@@ -2508,61 +2536,21 @@ function RunMockView({ mock, questions, onExit, challengeId }) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 py-8 px-4 sm:px-8">
         <div className="max-w-6xl mx-auto space-y-6">
-          {/* HERO — score, live stats, back button */}
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-950 via-blue-900 to-indigo-900 text-white p-6 sm:p-10 shadow-xl">
-            <div className="absolute -right-16 -top-16 w-72 h-72 bg-blue-400/20 rounded-full blur-3xl pointer-events-none" />
-            <div className="absolute -left-10 -bottom-16 w-56 h-56 bg-indigo-400/20 rounded-full blur-3xl pointer-events-none" />
-            <div className="relative">
-              <div className="flex items-center gap-2 text-blue-200 mb-1.5">
-                <CheckCircle2 size={18} />
-                <span className="text-xs font-medium uppercase tracking-wide">Test submitted</span>
-              </div>
-              <h2 className="text-lg sm:text-xl font-semibold mb-6">{mock.title}</h2>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 items-end mb-2">
-                <div className="col-span-2 sm:col-span-1">
-                  <div className="text-4xl sm:text-5xl font-bold">
-                    {score} <span className="text-lg font-normal text-blue-300">/ {mock.totalMarks}</span>
-                  </div>
-                  {percentile !== null && (
-                    <div className="inline-block mt-2 bg-white/15 text-white text-xs font-medium px-3 py-1 rounded-full">
-                      Better than {percentile}% of students
-                    </div>
-                  )}
-                </div>
-                <button onClick={() => correct > 0 && jumpToReview("correct")} disabled={correct === 0} className="text-left disabled:cursor-default">
-                  <div className="text-3xl font-bold text-emerald-300">{correct}</div>
-                  <div className={`text-xs text-blue-200 ${correct > 0 ? "underline decoration-dotted underline-offset-2" : ""}`}>Correct</div>
-                </button>
-                <button onClick={() => incorrect > 0 && jumpToReview("incorrect")} disabled={incorrect === 0} className="text-left disabled:cursor-default">
-                  <div className="text-3xl font-bold text-red-300">{incorrect}</div>
-                  <div className={`text-xs text-blue-200 ${incorrect > 0 ? "underline decoration-dotted underline-offset-2" : ""}`}>Incorrect</div>
-                </button>
-                <button onClick={() => skipped > 0 && jumpToReview("skipped")} disabled={skipped === 0} className="text-left disabled:cursor-default">
-                  <div className="text-3xl font-bold text-slate-300">{skipped}</div>
-                  <div className={`text-xs text-blue-200 ${skipped > 0 ? "underline decoration-dotted underline-offset-2" : ""}`}>Skipped</div>
-                </button>
-              </div>
-
-              {sectionBreakdown.length > 1 && (
-                <div className="flex flex-wrap gap-2 mt-4">
-                  {sectionBreakdown.map((s) => (
-                    <div key={s.label} className="bg-white/10 backdrop-blur rounded-lg px-3 py-2 text-xs">
-                      <div className="text-blue-200">{s.label}</div>
-                      <div className="font-semibold">{s.score}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <button onClick={onExit} className="mt-6 text-sm px-5 py-2.5 rounded-lg bg-white text-blue-950 font-medium hover:bg-blue-50 transition-colors">
-                Back to admin panel
-              </button>
-            </div>
-          </div>
-
-          {/* SECTION PERFORMANCE — interactive pie, right below the score */}
-          <SectionPerformancePicker sections={sections} sectionBreakdown={sectionBreakdown} />
+          {/* HERO — score, live stats, and per-section drill-down all in
+              one interactive card (overall vs. section is a tab switch, not
+              two separate sections repeating the same list). */}
+          <ResultsHero
+            mock={mock}
+            score={score}
+            correct={correct}
+            incorrect={incorrect}
+            skipped={skipped}
+            percentile={percentile}
+            sectionBreakdown={sectionBreakdown}
+            sections={sections}
+            onExit={onExit}
+            onJumpReview={jumpToReview}
+          />
 
           {/* QUESTION ANALYSIS — one unified, interactive card. Subject
               accuracy, pace, and the full per-question review used to be
@@ -2597,35 +2585,6 @@ function RunMockView({ mock, questions, onExit, challengeId }) {
                   <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Correct / Incorrect / Skipped</h3>
                   <AnswerBreakdownDonut attempts={[{ correct, incorrect, skipped }]} caption="questions in this mock" />
                 </div>
-              </div>
-
-              <div className="border-t border-slate-100 pt-5 mb-6">
-                <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Pace at a glance</h3>
-                <div className="flex items-center gap-3 text-[11px] text-slate-500 mb-3 flex-wrap">
-                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-100 border border-emerald-200" /> Quick</span>
-                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-amber-100 border border-amber-200" /> Normal</span>
-                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-red-100 border border-red-200" /> Slow</span>
-                </div>
-                {sections.map((s) => {
-                  const sList = questions[s.key] || [];
-                  if (sList.length === 0) return null;
-                  return (
-                    <div key={s.key} className="mb-3 last:mb-0">
-                      {sections.length > 1 && <div className="text-[11px] font-medium text-slate-400 mb-1.5">{s.label}</div>}
-                      <div className="grid grid-cols-8 sm:grid-cols-12 lg:grid-cols-[repeat(16,minmax(0,1fr))] gap-1.5">
-                        {sList.map((qq, i) => (
-                          <div
-                            key={qq.id}
-                            title={`${s.label} · Q${i + 1} — ${formatTime(timeSpent[qq.id] || 0)}`}
-                            className={`rounded text-center text-[10px] font-semibold py-1 border ${timeBadge(qq, s.key)}`}
-                          >
-                            {i + 1}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
               </div>
 
               <div className="border-t border-slate-100 pt-5">
@@ -3792,43 +3751,61 @@ function AnswerBreakdownDonut({ attempts, caption = "questions answered across a
   );
 }
 
-// Interactive per-section drill-down for the results screen, right under the
-// score — pick a section (skipped entirely for a Sectional Mock, which only
-// ever has one) and see a pie chart of just that section's correct/
-// incorrect/skipped split. Built from `sectionBreakdown` (already computed
-// per-mock in RunMockView's computeResults()), so this never touches any
-// other mock's data.
-function SectionPerformancePicker({ sections, sectionBreakdown }) {
-  const [selectedIdx, setSelectedIdx] = useState(0);
-  const sel = sections[selectedIdx];
-  const stats = sectionBreakdown[selectedIdx] || { correct: 0, incorrect: 0, skipped: 0, score: 0 };
-  const total = stats.correct + stats.incorrect + stats.skipped;
-  // Accuracy is correct ÷ attempted (correct + incorrect) — skipped
-  // questions were never attempted, so they don't dilute this number. `total`
-  // (all questions, including skipped) is still used below for the pie's
-  // Tooltip percentages, which show share-of-whole, a different thing.
+// The results-screen hero — score, live stats, AND per-section drill-down
+// all in one interactive surface. This used to be two separate things (a
+// static hero with plain non-interactive section-score tiles, then a whole
+// separate "Section performance" card further down repeating the same
+// sections as clickable tabs) — genuinely redundant, showing the same
+// section list twice. Now "Overall" and each section are tabs on the same
+// card: Overall shows the full-mock score/correct/incorrect/skipped (with
+// click-to-jump into Answer Review, unchanged); picking a section swaps the
+// same content area to that section's accuracy/pie/breakdown instead, with
+// a fade transition and a soft click sound on every tab change.
+function ResultsHero({ mock, score, correct, incorrect, skipped, percentile, sectionBreakdown, sections, onExit, onJumpReview }) {
+  const [tab, setTab] = useState("overall");
+  const sectionIdx = sections.findIndex((s) => s.key === tab);
+  const isSectionTab = sectionIdx >= 0;
+  const stats = isSectionTab ? sectionBreakdown[sectionIdx] : { correct, incorrect, skipped, score };
   const attempted = stats.correct + stats.incorrect;
   const accuracyPct = attempted ? Math.round((stats.correct / attempted) * 100) : 0;
-  const data = [
-    { name: "Correct", value: stats.correct, color: "#10b981" },
-    { name: "Incorrect", value: stats.incorrect, color: "#f87171" },
-    { name: "Skipped", value: stats.skipped, color: "#cbd5e1" },
+  const pieData = [
+    { name: "Correct", value: stats.correct, color: "#6ee7b7" },
+    { name: "Incorrect", value: stats.incorrect, color: "#fda4af" },
+    { name: "Skipped", value: stats.skipped, color: "rgba(255,255,255,0.25)" },
   ].filter((d) => d.value > 0);
 
+  function selectTab(key) {
+    playClickSound();
+    setTab(key);
+  }
+
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-      <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
-        <h3 className="text-sm font-semibold text-slate-700">Section performance</h3>
+    <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-950 via-blue-900 to-indigo-900 text-white p-6 sm:p-10 shadow-xl">
+      <div className="absolute -right-16 -top-16 w-72 h-72 bg-blue-400/20 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -left-10 -bottom-16 w-56 h-56 bg-indigo-400/20 rounded-full blur-3xl pointer-events-none" />
+      <div className="relative">
+        <div className="flex items-center gap-2 text-blue-200 mb-1.5">
+          <CheckCircle2 size={18} />
+          <span className="text-xs font-medium uppercase tracking-wide">Test submitted</span>
+        </div>
+        <h2 className="text-lg sm:text-xl font-semibold mb-5">{mock.title}</h2>
+
         {sections.length > 1 && (
-          <div className="flex flex-wrap gap-1.5">
-            {sections.map((s, i) => (
+          <div className="flex flex-wrap gap-2 mb-6">
+            <button
+              onClick={() => selectTab("overall")}
+              className={`text-xs font-medium px-3.5 py-1.5 rounded-full border transition-all duration-200 hover:scale-105 ${
+                tab === "overall" ? "bg-white text-blue-950 border-white" : "bg-white/10 border-white/20 text-blue-100 hover:bg-white/20"
+              }`}
+            >
+              Overall
+            </button>
+            {sections.map((s) => (
               <button
                 key={s.key}
-                onClick={() => setSelectedIdx(i)}
-                className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                  i === selectedIdx
-                    ? "bg-blue-900 text-white border-blue-900"
-                    : "bg-white text-slate-500 border-slate-200 hover:border-blue-300"
+                onClick={() => selectTab(s.key)}
+                className={`text-xs font-medium px-3.5 py-1.5 rounded-full border transition-all duration-200 hover:scale-105 ${
+                  tab === s.key ? "bg-white text-blue-950 border-white" : "bg-white/10 border-white/20 text-blue-100 hover:bg-white/20"
                 }`}
               >
                 {s.label}
@@ -3836,45 +3813,78 @@ function SectionPerformancePicker({ sections, sectionBreakdown }) {
             ))}
           </div>
         )}
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 items-center">
-        <ResponsiveContainer width="100%" height={220}>
-          <PieChart>
-            <Pie data={data} dataKey="value" nameKey="name" outerRadius={90} strokeWidth={2} stroke="#fff">
-              {data.map((d) => (
-                <Cell key={d.name} fill={d.color} />
-              ))}
-            </Pie>
-            <Tooltip
-              contentStyle={{ borderRadius: 10, border: "1px solid #e2e8f0", fontSize: 12 }}
-              formatter={(value, name) => [`${value} (${total ? Math.round((value / total) * 100) : 0}%)`, name]}
-            />
-            <Legend verticalAlign="bottom" height={28} iconType="circle" wrapperStyle={{ fontSize: 12 }} />
-          </PieChart>
-        </ResponsiveContainer>
-        <div className="space-y-4">
-          <div>
-            <div className="text-4xl font-bold text-slate-800">{accuracyPct}%</div>
-            <div className="text-xs text-slate-400">Accuracy in {sel.label}</div>
-          </div>
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="bg-emerald-50 rounded-lg py-2">
-              <div className="font-semibold text-emerald-700">{stats.correct}</div>
-              <div className="text-[10px] text-emerald-600">Correct</div>
+
+        <div key={tab} className="animate-fade-slide">
+          {!isSectionTab ? (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 items-end mb-2">
+                <div className="col-span-2 sm:col-span-1">
+                  <div className="text-4xl sm:text-5xl font-bold cursor-default hover:scale-105 transition-transform duration-200 inline-block">
+                    {score} <span className="text-lg font-normal text-blue-300">/ {mock.totalMarks}</span>
+                  </div>
+                  {percentile !== null && (
+                    <div className="inline-block mt-2 bg-white/15 text-white text-xs font-medium px-3 py-1 rounded-full">
+                      Better than {percentile}% of students
+                    </div>
+                  )}
+                </div>
+                <button onClick={() => correct > 0 && onJumpReview("correct")} disabled={correct === 0} className="text-left disabled:cursor-default group">
+                  <div className="text-3xl font-bold text-emerald-300 group-hover:scale-110 transition-transform duration-200 inline-block">{correct}</div>
+                  <div className={`text-xs text-blue-200 ${correct > 0 ? "underline decoration-dotted underline-offset-2" : ""}`}>Correct</div>
+                </button>
+                <button onClick={() => incorrect > 0 && onJumpReview("incorrect")} disabled={incorrect === 0} className="text-left disabled:cursor-default group">
+                  <div className="text-3xl font-bold text-red-300 group-hover:scale-110 transition-transform duration-200 inline-block">{incorrect}</div>
+                  <div className={`text-xs text-blue-200 ${incorrect > 0 ? "underline decoration-dotted underline-offset-2" : ""}`}>Incorrect</div>
+                </button>
+                <button onClick={() => skipped > 0 && onJumpReview("skipped")} disabled={skipped === 0} className="text-left disabled:cursor-default group">
+                  <div className="text-3xl font-bold text-slate-300 group-hover:scale-110 transition-transform duration-200 inline-block">{skipped}</div>
+                  <div className={`text-xs text-blue-200 ${skipped > 0 ? "underline decoration-dotted underline-offset-2" : ""}`}>Skipped</div>
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 items-center">
+              <ResponsiveContainer width="100%" height={180}>
+                <PieChart>
+                  <Pie data={pieData} dataKey="value" nameKey="name" outerRadius={75} strokeWidth={2} stroke="rgba(255,255,255,0.15)">
+                    {pieData.map((d) => (
+                      <Cell key={d.name} fill={d.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{ borderRadius: 10, border: "none", fontSize: 12, background: "rgba(15,23,42,0.9)", color: "#fff" }}
+                    formatter={(value, name) => [value, name]}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <div>
+                <div className="text-4xl font-bold cursor-default hover:scale-105 transition-transform duration-200 inline-block">{accuracyPct}%</div>
+                <div className="text-xs text-blue-200 mb-3">Accuracy in {sections[sectionIdx].label}</div>
+                <div className="grid grid-cols-3 gap-2 text-center max-w-xs">
+                  <div className="bg-white/10 rounded-lg py-2">
+                    <div className="font-semibold text-emerald-300">{stats.correct}</div>
+                    <div className="text-[10px] text-blue-200">Correct</div>
+                  </div>
+                  <div className="bg-white/10 rounded-lg py-2">
+                    <div className="font-semibold text-red-300">{stats.incorrect}</div>
+                    <div className="text-[10px] text-blue-200">Incorrect</div>
+                  </div>
+                  <div className="bg-white/10 rounded-lg py-2">
+                    <div className="font-semibold text-slate-300">{stats.skipped}</div>
+                    <div className="text-[10px] text-blue-200">Skipped</div>
+                  </div>
+                </div>
+                <div className="text-xs text-blue-200 mt-3">
+                  Score in this section: <span className="font-medium text-white">{stats.score}</span>
+                </div>
+              </div>
             </div>
-            <div className="bg-red-50 rounded-lg py-2">
-              <div className="font-semibold text-red-600">{stats.incorrect}</div>
-              <div className="text-[10px] text-red-500">Incorrect</div>
-            </div>
-            <div className="bg-slate-50 rounded-lg py-2">
-              <div className="font-semibold text-slate-600">{stats.skipped}</div>
-              <div className="text-[10px] text-slate-400">Skipped</div>
-            </div>
-          </div>
-          <div className="text-xs text-slate-400">
-            Score in this section: <span className="font-medium text-slate-700">{stats.score}</span>
-          </div>
+          )}
         </div>
+
+        <button onClick={onExit} className="mt-6 text-sm px-5 py-2.5 rounded-lg bg-white text-blue-950 font-medium hover:bg-blue-50 transition-colors">
+          Back to admin panel
+        </button>
       </div>
     </div>
   );
