@@ -2223,9 +2223,11 @@ function RunMockView({ mock, questions, onExit, challengeId }) {
   const [confirmAction, setConfirmAction] = useState(null); // 'next-section' | 'finish' | null
   const [timeSpent, setTimeSpent] = useState({}); // questionId -> seconds spent on it
   const [reviewFilter, setReviewFilter] = useState("all"); // 'all' | 'correct' | 'incorrect' | 'skipped'
+  const [reviewSectionKey, setReviewSectionKey] = useState(null); // null = every section, or one section's key
   const reviewSectionRef = useRef(null);
-  function jumpToReview(filter) {
+  function jumpToReview(filter, sectionKey = null) {
     setReviewFilter(filter);
+    setReviewSectionKey(sectionKey);
     reviewSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
@@ -2590,10 +2592,18 @@ function RunMockView({ mock, questions, onExit, challengeId }) {
               <div className="border-t border-slate-100 pt-5">
                 <div ref={reviewSectionRef} className="flex items-center justify-between mb-3">
                   <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                    Answer review{reviewFilter !== "all" ? ` — ${reviewFilter} only` : ""}
+                    Answer review
+                    {reviewFilter !== "all" ? ` — ${reviewFilter} only` : ""}
+                    {reviewSectionKey ? ` in ${sections.find((s) => s.key === reviewSectionKey)?.label}` : ""}
                   </h3>
-                  {reviewFilter !== "all" && (
-                    <button onClick={() => setReviewFilter("all")} className="text-xs text-blue-700 font-medium">
+                  {(reviewFilter !== "all" || reviewSectionKey) && (
+                    <button
+                      onClick={() => {
+                        setReviewFilter("all");
+                        setReviewSectionKey(null);
+                      }}
+                      className="text-xs text-blue-700 font-medium"
+                    >
                       Show all →
                     </button>
                   )}
@@ -2601,7 +2611,8 @@ function RunMockView({ mock, questions, onExit, challengeId }) {
                 <div className="space-y-2">
                   {sections
                     .flatMap((s) => (questions[s.key] || []).map((qq, i) => ({ s, qq, i })))
-                    .filter(({ qq }) => {
+                    .filter(({ s, qq }) => {
+                      if (reviewSectionKey && s.key !== reviewSectionKey) return false;
                       const sel = answers[qq.id];
                       if (reviewFilter === "all") return true;
                       if (reviewFilter === "skipped") return sel === undefined;
@@ -3861,18 +3872,30 @@ function ResultsHero({ mock, score, correct, incorrect, skipped, percentile, sec
                 <div className="text-4xl font-bold cursor-default hover:scale-105 transition-transform duration-200 inline-block">{accuracyPct}%</div>
                 <div className="text-xs text-blue-200 mb-3">Accuracy in {sections[sectionIdx].label}</div>
                 <div className="grid grid-cols-3 gap-2 text-center max-w-xs">
-                  <div className="bg-white/10 rounded-lg py-2">
-                    <div className="font-semibold text-emerald-300">{stats.correct}</div>
+                  <button
+                    onClick={() => stats.correct > 0 && onJumpReview("correct", sections[sectionIdx].key)}
+                    disabled={stats.correct === 0}
+                    className="bg-white/10 rounded-lg py-2 hover:bg-white/20 transition-colors disabled:cursor-default disabled:hover:bg-white/10 group"
+                  >
+                    <div className="font-semibold text-emerald-300 group-hover:scale-110 transition-transform duration-200 inline-block">{stats.correct}</div>
                     <div className="text-[10px] text-blue-200">Correct</div>
-                  </div>
-                  <div className="bg-white/10 rounded-lg py-2">
-                    <div className="font-semibold text-red-300">{stats.incorrect}</div>
+                  </button>
+                  <button
+                    onClick={() => stats.incorrect > 0 && onJumpReview("incorrect", sections[sectionIdx].key)}
+                    disabled={stats.incorrect === 0}
+                    className="bg-white/10 rounded-lg py-2 hover:bg-white/20 transition-colors disabled:cursor-default disabled:hover:bg-white/10 group"
+                  >
+                    <div className="font-semibold text-red-300 group-hover:scale-110 transition-transform duration-200 inline-block">{stats.incorrect}</div>
                     <div className="text-[10px] text-blue-200">Incorrect</div>
-                  </div>
-                  <div className="bg-white/10 rounded-lg py-2">
-                    <div className="font-semibold text-slate-300">{stats.skipped}</div>
+                  </button>
+                  <button
+                    onClick={() => stats.skipped > 0 && onJumpReview("skipped", sections[sectionIdx].key)}
+                    disabled={stats.skipped === 0}
+                    className="bg-white/10 rounded-lg py-2 hover:bg-white/20 transition-colors disabled:cursor-default disabled:hover:bg-white/10 group"
+                  >
+                    <div className="font-semibold text-slate-300 group-hover:scale-110 transition-transform duration-200 inline-block">{stats.skipped}</div>
                     <div className="text-[10px] text-blue-200">Skipped</div>
-                  </div>
+                  </button>
                 </div>
                 <div className="text-xs text-blue-200 mt-3">
                   Score in this section: <span className="font-medium text-white">{stats.score}</span>
