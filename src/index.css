@@ -14,3 +14,19 @@ body {
 .recharts-wrapper :focus {
   outline: none;
 }
+
+/* Used wherever swapping content (e.g. switching a segmented-control tab)
+   should feel like a deliberate transition rather than an instant jump-cut. */
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fade-slide {
+  animation: fadeSlideIn 0.25s ease-out;
+}

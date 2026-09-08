@@ -4030,6 +4030,7 @@ function ExamPerformancePanel({ attempts, mocksIndex }) {
 }
 
 function ProgressView({ attempts, mocksIndex, onBack, onPractice }) {
+  const [progressTab, setProgressTab] = useState(MOCK_TYPES.FULL);
   const streak = computeStreak(attempts);
   const topicAgg = {};
   attempts.forEach((a) => {
@@ -4076,27 +4077,48 @@ function ProgressView({ attempts, mocksIndex, onBack, onPractice }) {
           </div>
         ) : (
           <>
-            <h2 className="text-sm font-semibold text-slate-700 mb-3 px-1">Full Mock performance</h2>
-            {fullAttempts.length > 0 ? (
-              <div className="mb-6">
-                <ExamPerformancePanel attempts={fullAttempts} mocksIndex={mocksIndex} />
-              </div>
-            ) : (
-              <div className="bg-white border border-dashed border-slate-200 rounded-xl p-8 text-center text-sm text-slate-400 mb-6">
-                No Full Mocks attempted yet.
-              </div>
-            )}
+            <div className="inline-flex bg-slate-100 rounded-full p-1 mb-4">
+              <button
+                onClick={() => setProgressTab(MOCK_TYPES.FULL)}
+                className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-full transition-all duration-300 ${
+                  progressTab === MOCK_TYPES.FULL ? "bg-white text-blue-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                Full Mock
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${progressTab === MOCK_TYPES.FULL ? "bg-blue-100 text-blue-700" : "bg-slate-200 text-slate-500"}`}>
+                  {fullAttempts.length}
+                </span>
+              </button>
+              <button
+                onClick={() => setProgressTab(MOCK_TYPES.SECTIONAL)}
+                className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-full transition-all duration-300 ${
+                  progressTab === MOCK_TYPES.SECTIONAL ? "bg-white text-blue-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                Sectional Mock
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${progressTab === MOCK_TYPES.SECTIONAL ? "bg-blue-100 text-blue-700" : "bg-slate-200 text-slate-500"}`}>
+                  {sectionalAttempts.length}
+                </span>
+              </button>
+            </div>
 
-            <h2 className="text-sm font-semibold text-slate-700 mb-3 px-1">Sectional Mock performance</h2>
-            {sectionalAttempts.length > 0 ? (
-              <div className="mb-6">
+            <div key={progressTab} className="animate-fade-slide mb-6">
+              {progressTab === MOCK_TYPES.FULL ? (
+                fullAttempts.length > 0 ? (
+                  <ExamPerformancePanel attempts={fullAttempts} mocksIndex={mocksIndex} />
+                ) : (
+                  <div className="bg-white border border-dashed border-slate-200 rounded-xl p-8 text-center text-sm text-slate-400">
+                    No Full Mocks attempted yet.
+                  </div>
+                )
+              ) : sectionalAttempts.length > 0 ? (
                 <ExamPerformancePanel attempts={sectionalAttempts} mocksIndex={mocksIndex} />
-              </div>
-            ) : (
-              <div className="bg-white border border-dashed border-slate-200 rounded-xl p-8 text-center text-sm text-slate-400 mb-6">
-                No Sectional Mocks attempted yet.
-              </div>
-            )}
+              ) : (
+                <div className="bg-white border border-dashed border-slate-200 rounded-xl p-8 text-center text-sm text-slate-400">
+                  No Sectional Mocks attempted yet.
+                </div>
+              )}
+            </div>
 
             {weakTopics.length > 0 && (
               <div className="bg-white border border-slate-200 rounded-xl p-5 mb-4">
