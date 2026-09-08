@@ -619,8 +619,10 @@ function AnalyticsView({ mocksIndex }) {
   const avgAccuracy = scopedRows.length
     ? Math.round(
         (scopedRows.reduce((sum, r) => {
-          const total = r.correct + r.incorrect + r.skipped;
-          return sum + (total ? r.correct / total : 0);
+          // Accuracy is correct ÷ attempted — skipped questions were never
+          // attempted, so they don't dilute this.
+          const attempted = r.correct + r.incorrect;
+          return sum + (attempted ? r.correct / attempted : 0);
         }, 0) /
           scopedRows.length) *
           100
@@ -646,8 +648,10 @@ function AnalyticsView({ mocksIndex }) {
     p.attempts += 1;
     p.devices.add(r.deviceId);
     p.scoreSum += r.score;
-    const total = r.correct + r.incorrect + r.skipped;
-    p.accSum += total ? r.correct / total : 0;
+    // Accuracy is correct ÷ attempted — skipped questions were never
+    // attempted, so they don't dilute this.
+    const attempted = r.correct + r.incorrect;
+    p.accSum += attempted ? r.correct / attempted : 0;
   });
   const perMockRows = Object.entries(perMock)
     .map(([mockId, v]) => ({
@@ -2373,14 +2377,20 @@ function RunMockView({ mock, questions, onExit, challengeId }) {
 
     // Topic-wise performance — groups by each question's tagged topic, or
     // falls back to its section label when no topic was set on it (so this
-    // is always useful even for mocks made before topics existed).
+    // is always useful even for mocks made before topics existed). Accuracy
+    // is correct ÷ attempted: a skipped question was never attempted, so it
+    // doesn't count toward a topic's total at all (not as wrong, and not
+    // diluting the denominator) — a topic with nothing attempted just never
+    // gets an entry here, rather than showing a misleading 0%.
     const topicStats = {};
     sections.forEach((s) => {
       (questions[s.key] || []).forEach((qq) => {
+        const sel = answers[qq.id];
+        if (sel === undefined) return;
         const key = qq.topic || s.label;
         if (!topicStats[key]) topicStats[key] = { correct: 0, total: 0 };
         topicStats[key].total += 1;
-        if (answers[qq.id] === qq.answer) topicStats[key].correct += 1;
+        if (sel === qq.answer) topicStats[key].correct += 1;
       });
     });
     const topicRows = Object.entries(topicStats)
@@ -3687,9 +3697,12 @@ function scorePercentFor(attempt, mocksIndex, accuracyPct) {
   if (!mock?.totalMarks) return accuracyPct;
   return Math.max(0, Math.min(100, (attempt.score / mock.totalMarks) * 100));
 }
+// Accuracy is correct ÷ attempted (correct + incorrect), not ÷ every question
+// in the mock — a skipped question was never attempted, so it shouldn't
+// dilute this number.
 function accuracyPercentFor(attempt) {
-  const total = attempt.correct + attempt.incorrect + attempt.skipped;
-  return total ? (attempt.correct / total) * 100 : 0;
+  const attempted = attempt.correct + attempt.incorrect;
+  return attempted ? (attempt.correct / attempted) * 100 : 0;
 }
 
 function ProgressTrendChart({ attempts, mocksIndex }) {
@@ -3798,7 +3811,12 @@ function SectionPerformancePicker({ sections, sectionBreakdown }) {
   const sel = sections[selectedIdx];
   const stats = sectionBreakdown[selectedIdx] || { correct: 0, incorrect: 0, skipped: 0, score: 0 };
   const total = stats.correct + stats.incorrect + stats.skipped;
-  const accuracyPct = total ? Math.round((stats.correct / total) * 100) : 0;
+  // Accuracy is correct ÷ attempted (correct + incorrect) — skipped
+  // questions were never attempted, so they don't dilute this number. `total`
+  // (all questions, including skipped) is still used below for the pie's
+  // Tooltip percentages, which show share-of-whole, a different thing.
+  const attempted = stats.correct + stats.incorrect;
+  const accuracyPct = attempted ? Math.round((stats.correct / attempted) * 100) : 0;
   const data = [
     { name: "Correct", value: stats.correct, color: "#10b981" },
     { name: "Incorrect", value: stats.incorrect, color: "#f87171" },
