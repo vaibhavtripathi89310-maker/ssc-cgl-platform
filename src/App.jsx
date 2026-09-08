@@ -5,7 +5,7 @@ import {
   ArrowLeft, ArrowRight, Save, X, Lock, Play, Clock, Flag, Download, LogOut,
   TrendingUp, Target, Youtube, Trophy, Flame, Share2, BarChart2,
   Swords, ThumbsUp, ThumbsDown, Link2, Activity,
-  Landmark, GraduationCap, Award, Sparkles,
+  Landmark, GraduationCap, Award, Sparkles, FileText, Layers,
 } from "lucide-react";
 import {
   loadMocksIndex, saveMocksIndex, loadMockQuestions, saveMockQuestions, deleteMockQuestions,
@@ -3489,15 +3489,17 @@ function StudentMockCard({ mock, onStart }) {
   const sections = sectionsForMock(mock);
   const totalQuestions = sections.reduce((sum, s) => sum + requiredCountFor(mock, s.key), 0);
   const isSectional = getMockType(mock) === MOCK_TYPES.SECTIONAL;
+  const theme = EXAM_THEME[getExamKey(mock)];
 
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-5 flex flex-col">
-      <div className="flex items-center gap-2 mb-2">
-        <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${isSectional ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>
-          {mockTypeBadgeLabel(mock)}
-        </span>
+    <div
+      className={`group relative bg-white border border-slate-200 rounded-3xl p-5 flex flex-col shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden ${theme.ring}`}
+    >
+      <div className={`absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r ${theme.gradient}`} />
+      <div className="flex items-center gap-2 mb-2 mt-1">
+        <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${theme.badgeBg}`}>{mockTypeBadgeLabel(mock)}</span>
       </div>
-      <h3 className="font-semibold text-slate-800 mb-1">{mock.title}</h3>
+      <h3 className="font-bold text-slate-800 mb-1">{mock.title}</h3>
       {isSectional && sections[0] && (
         <p className="text-xs text-slate-500 mb-3">{sections[0].label}</p>
       )}
@@ -3505,21 +3507,27 @@ function StudentMockCard({ mock, onStart }) {
 
       <div className="grid grid-cols-3 gap-2 text-center my-3 py-3 border-y border-slate-100">
         <div>
+          <ListChecks size={14} className="mx-auto mb-1 text-slate-400" />
           <div className="text-sm font-semibold text-slate-800">{totalQuestions}</div>
           <div className="text-[10px] text-slate-400">Questions</div>
         </div>
         <div>
+          <Clock size={14} className="mx-auto mb-1 text-slate-400" />
           <div className="text-sm font-semibold text-slate-800">{mock.duration}</div>
           <div className="text-[10px] text-slate-400">Minutes</div>
         </div>
         <div>
+          <Target size={14} className="mx-auto mb-1 text-slate-400" />
           <div className="text-sm font-semibold text-slate-800">{mock.totalMarks}</div>
           <div className="text-[10px] text-slate-400">Marks</div>
         </div>
       </div>
 
-      <button onClick={() => onStart(mock)} className="mt-auto w-full text-sm font-medium bg-blue-900 text-white rounded-lg py-2.5">
-        View Details
+      <button
+        onClick={() => onStart(mock)}
+        className={`mt-auto w-full flex items-center justify-center gap-1.5 text-sm font-medium text-white rounded-xl py-2.5 bg-gradient-to-r ${theme.gradient} group-hover:shadow-lg transition-shadow`}
+      >
+        View Details <ArrowRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
       </button>
     </div>
   );
@@ -3527,73 +3535,86 @@ function StudentMockCard({ mock, onStart }) {
 
 function StudentInstructionsView({ mock, questionCount, onStart, onBack, viaChallenge }) {
   const sections = sectionsForMock(mock);
-  const isSectional = getMockType(mock) === MOCK_TYPES.SECTIONAL;
+  const theme = EXAM_THEME[getExamKey(mock)];
 
   return (
     <div className="max-w-2xl mx-auto">
-      <button onClick={onBack} className="text-sm text-slate-500 mb-4">← Back to mock list</button>
-      <div className="bg-white border border-slate-200 rounded-2xl p-8">
-        <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-semibold mb-3 ${isSectional ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>
-          {mockTypeBadgeLabel(mock)}
-        </span>
-        <h1 className="text-xl font-semibold text-slate-800 mb-1">{mock.title}</h1>
-        {mock.description && <p className="text-sm text-slate-500 mb-5">{mock.description}</p>}
-        {viaChallenge && (
-          <div className="bg-blue-50 border border-blue-200 rounded-md px-3 py-2 text-xs text-blue-800 mb-5 flex items-center gap-2">
-            <Swords size={14} className="shrink-0" /> Finish this test to get a link you can send to a friend to challenge them.
-          </div>
-        )}
-
-        <div className="grid grid-cols-3 gap-3 mb-6">
-          <div className="bg-slate-50 rounded-lg p-3 text-center">
-            <div className="text-lg font-semibold text-slate-800">{questionCount}</div>
-            <div className="text-xs text-slate-400">Questions</div>
-          </div>
-          <div className="bg-slate-50 rounded-lg p-3 text-center">
-            <div className="text-lg font-semibold text-slate-800">{mock.duration} min</div>
-            <div className="text-xs text-slate-400">Duration</div>
-          </div>
-          <div className="bg-slate-50 rounded-lg p-3 text-center">
-            <div className="text-lg font-semibold text-slate-800">{mock.totalMarks}</div>
-            <div className="text-xs text-slate-400">Total Marks</div>
+      <button onClick={onBack} className="text-sm text-slate-500 hover:text-slate-700 mb-4 transition-colors">
+        ← Back to mock list
+      </button>
+      <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+        <div className={`relative overflow-hidden bg-gradient-to-br ${theme.gradient} text-white p-8`}>
+          <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-2xl pointer-events-none" />
+          <div className="relative">
+            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold mb-3 bg-white/20">
+              {mockTypeBadgeLabel(mock)}
+            </span>
+            <h1 className="text-xl font-bold mb-1">{mock.title}</h1>
+            {mock.description && <p className="text-sm text-white/80">{mock.description}</p>}
           </div>
         </div>
 
-        <div className="mb-6">
-          <h2 className="text-sm font-semibold text-slate-700 mb-2">Sections</h2>
-          <div className="space-y-1.5">
-            {sections.map((s) => (
-              <div key={s.key} className="flex justify-between text-sm bg-slate-50 rounded-md px-3 py-2">
-                <span className="text-slate-600">{s.label}</span>
-                <span className="text-slate-400">{requiredCountFor(mock, s.key)} questions</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="mb-6 text-sm text-slate-600 space-y-1.5">
-          <h2 className="text-sm font-semibold text-slate-700 mb-2">Instructions</h2>
-          {mock.instructions ? (
-            <p className="whitespace-pre-line">{mock.instructions}</p>
-          ) : (
-            <ul className="list-disc pl-5 space-y-1 text-slate-500">
-              {getExam(mock).timerMode === "composite" ? (
-                <li>One timer for the whole test — you can move freely between any section's questions the entire time, in any order.</li>
-              ) : (
-                <>
-                  <li>Each section has its own timer. Once time is up, you'll automatically move to the next section.</li>
-                  <li>Once you leave a section, you cannot return to it.</li>
-                </>
-              )}
-              <li>{mock.negativeMarking > 0 ? `Negative marking: ${mock.negativeMarking} mark(s) deducted per wrong answer.` : "No negative marking — attempt every question."}</li>
-              <li>You can finish the test at any time using "Finish Test".</li>
-            </ul>
+        <div className="p-8">
+          {viaChallenge && (
+            <div className="bg-blue-50 border border-blue-200 rounded-md px-3 py-2 text-xs text-blue-800 mb-5 flex items-center gap-2">
+              <Swords size={14} className="shrink-0" /> Finish this test to get a link you can send to a friend to challenge them.
+            </div>
           )}
-        </div>
 
-        <button onClick={onStart} className="w-full bg-blue-900 text-white text-sm font-medium rounded-lg py-3">
-          Start Test
-        </button>
+          <div className="grid grid-cols-3 gap-3 mb-6">
+            <div className={`rounded-2xl p-3 text-center ${theme.iconBg}`}>
+              <div className="text-lg font-bold mb-0.5">{questionCount}</div>
+              <div className="text-xs opacity-70">Questions</div>
+            </div>
+            <div className={`rounded-2xl p-3 text-center ${theme.iconBg}`}>
+              <div className="text-lg font-bold mb-0.5">{mock.duration} min</div>
+              <div className="text-xs opacity-70">Duration</div>
+            </div>
+            <div className={`rounded-2xl p-3 text-center ${theme.iconBg}`}>
+              <div className="text-lg font-bold mb-0.5">{mock.totalMarks}</div>
+              <div className="text-xs opacity-70">Total Marks</div>
+            </div>
+          </div>
+
+          <div className="mb-6">
+            <h2 className="text-sm font-semibold text-slate-700 mb-2">Sections</h2>
+            <div className="space-y-1.5">
+              {sections.map((s) => (
+                <div key={s.key} className="flex justify-between text-sm bg-slate-50 rounded-lg px-3 py-2.5 hover:bg-slate-100 transition-colors">
+                  <span className="text-slate-600">{s.label}</span>
+                  <span className="text-slate-400">{requiredCountFor(mock, s.key)} questions</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="mb-6 text-sm text-slate-600 space-y-1.5">
+            <h2 className="text-sm font-semibold text-slate-700 mb-2">Instructions</h2>
+            {mock.instructions ? (
+              <p className="whitespace-pre-line">{mock.instructions}</p>
+            ) : (
+              <ul className="list-disc pl-5 space-y-1 text-slate-500">
+                {getExam(mock).timerMode === "composite" ? (
+                  <li>One timer for the whole test — you can move freely between any section's questions the entire time, in any order.</li>
+                ) : (
+                  <>
+                    <li>Each section has its own timer. Once time is up, you'll automatically move to the next section.</li>
+                    <li>Once you leave a section, you cannot return to it.</li>
+                  </>
+                )}
+                <li>{mock.negativeMarking > 0 ? `Negative marking: ${mock.negativeMarking} mark(s) deducted per wrong answer.` : "No negative marking — attempt every question."}</li>
+                <li>You can finish the test at any time using "Finish Test".</li>
+              </ul>
+            )}
+          </div>
+
+          <button
+            onClick={onStart}
+            className={`w-full text-white text-sm font-semibold rounded-xl py-3.5 bg-gradient-to-r ${theme.gradient} hover:shadow-lg hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2`}
+          >
+            Start Test <ArrowRight size={16} />
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -3601,22 +3622,37 @@ function StudentInstructionsView({ mock, questionCount, onStart, onBack, viaChal
 
 function TypeSelectCard({ type, count, onSelect, exam }) {
   const isSectional = type === MOCK_TYPES.SECTIONAL;
+  const theme = EXAM_THEME[exam.key];
+  const Icon = isSectional ? Layers : FileText;
   const sectionNames = exam.sections.map((s) => s.label).join(", ");
   return (
     <button
       onClick={() => onSelect(type)}
-      className="bg-white border border-slate-200 rounded-2xl p-8 text-left hover:border-blue-300 hover:shadow-sm transition-all"
+      className={`group relative bg-white border border-slate-200 rounded-3xl p-7 text-left shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden ${theme.ring}`}
     >
-      <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-semibold mb-3 ${isSectional ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>
+      <div className={`absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r ${theme.gradient}`} />
+      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 ${theme.iconBg}`}>
+        <Icon size={22} />
+      </div>
+      <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold mb-2 ${theme.badgeBg}`}>
         {isSectional ? "SECTIONAL" : "FULL LENGTH"}
       </span>
-      <h2 className="text-lg font-semibold text-slate-800 mb-1">{isSectional ? "Sectional Mock" : "Full Mock"}</h2>
-      <p className="text-sm text-slate-500 mb-4">
+      <h2 className="text-lg font-bold text-slate-800 mb-1.5">{isSectional ? "Sectional Mock" : "Full Mock"}</h2>
+      <p className="text-sm text-slate-500 mb-5 leading-relaxed">
         {isSectional
           ? `Practice one section at a time — ${sectionNames} — at your own configured length.`
           : `The complete ${exam.label} paper — ${sectionNames}, all in one sitting.`}
       </p>
-      <span className="text-sm font-medium text-blue-800">{count} test{count === 1 ? "" : "s"} available →</span>
+      <div className="flex items-center justify-between">
+        <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${theme.badgeBg}`}>
+          {count} test{count === 1 ? "" : "s"} available
+        </span>
+        <span
+          className={`inline-flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br ${theme.gradient} text-white group-hover:scale-110 transition-transform`}
+        >
+          <ArrowRight size={15} />
+        </span>
+      </div>
     </button>
   );
 }
@@ -4424,44 +4460,68 @@ function StudentApp() {
 
   if (view === "type") {
     const exam = EXAMS[examFilter] || EXAMS[DEFAULT_EXAM];
+    const theme = EXAM_THEME[exam.key];
+    const ExamIcon = theme.icon;
     return (
-      <div className="min-h-screen bg-slate-50">
-        <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
-          <div>
-            <button onClick={backToExam} className="text-sm text-slate-500 mb-1">← Back to exams</button>
-            <h1 className="text-base font-semibold text-slate-800">{exam.label} Mock Tests</h1>
-            <p className="text-xs text-slate-400">{publishedMocksInExam.length} test{publishedMocksInExam.length === 1 ? "" : "s"} available</p>
+      <div className="min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50">
+        <div className={`relative overflow-hidden bg-gradient-to-br ${theme.gradient} text-white px-6 py-10 sm:py-14`}>
+          <div className="absolute -right-16 -top-16 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="relative max-w-5xl mx-auto">
+            <button onClick={backToExam} className="text-sm text-white/80 hover:text-white mb-4 inline-flex items-center gap-1 transition-colors">
+              ← Back to exams
+            </button>
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur flex items-center justify-center shrink-0">
+                  <ExamIcon size={22} />
+                </div>
+                <div>
+                  <h1 className="text-xl sm:text-2xl font-bold">{exam.label} Mock Tests</h1>
+                  <p className="text-sm text-white/70">{publishedMocksInExam.length} test{publishedMocksInExam.length === 1 ? "" : "s"} available</p>
+                </div>
+              </div>
+              <button
+                onClick={openProgress}
+                className="flex items-center gap-1.5 text-xs font-medium bg-white/15 backdrop-blur text-white px-3 py-2 rounded-full hover:bg-white/25 transition-colors"
+              >
+                <TrendingUp size={13} /> My Progress
+              </button>
+            </div>
           </div>
-          <button onClick={openProgress} className="flex items-center gap-1.5 text-xs font-medium text-blue-700 border border-blue-200 bg-blue-50 px-3 py-1.5 rounded-full">
-            <TrendingUp size={13} /> My Progress
-          </button>
-        </header>
-        <main className="p-6 max-w-3xl mx-auto">
-          <p className="text-sm text-slate-500 mb-5">What would you like to practice?</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+        </div>
+
+        <main className="max-w-5xl mx-auto px-6 -mt-6 pb-16 relative">
+          <p className="text-sm text-slate-500 mb-5 mt-8">What would you like to practice?</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
             <TypeSelectCard type={MOCK_TYPES.FULL} count={fullCount} onSelect={chooseType} exam={exam} />
             <TypeSelectCard type={MOCK_TYPES.SECTIONAL} count={sectionalCount} onSelect={chooseType} exam={exam} />
           </div>
 
           <button
             onClick={chooseChallenge}
-            className="w-full bg-gradient-to-r from-blue-900 to-blue-700 text-white rounded-2xl p-8 text-left hover:opacity-95 transition-opacity"
+            className={`group w-full bg-gradient-to-r ${theme.gradient} text-white rounded-3xl p-8 text-left hover:shadow-xl hover:-translate-y-1 transition-all duration-300 relative overflow-hidden`}
           >
-            <div className="flex items-center gap-2 mb-3">
-              <span className="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-white/20">1v1</span>
-              <span
-                title="Take any mock, then send the link to a friend. Once they finish it too, you'll both be able to see a full side-by-side answer sheet — every question, both people's answers, and how much time each of you took."
-                className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-white/20 text-white text-[10px] font-bold cursor-help"
-              >
-                i
+            <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-2xl pointer-events-none" />
+            <div className="relative">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/20">1v1</span>
+                <span
+                  title="Take any mock, then send the link to a friend. Once they finish it too, you'll both be able to see a full side-by-side answer sheet — every question, both people's answers, and how much time each of you took."
+                  className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-white/20 text-white text-[10px] font-bold cursor-help"
+                >
+                  i
+                </span>
+              </div>
+              <h2 className="text-lg font-bold mb-1 flex items-center gap-2">
+                <Swords size={18} /> Challenge a Friend
+              </h2>
+              <p className="text-sm text-white/80">
+                Take any mock, then challenge a friend to beat your score — see exactly how you each did, question by question.
+              </p>
+              <span className="inline-flex items-center gap-1 mt-4 text-sm font-medium group-hover:gap-2 transition-all">
+                Get started <ArrowRight size={15} />
               </span>
             </div>
-            <h2 className="text-lg font-semibold mb-1 flex items-center gap-2">
-              <Swords size={18} /> Challenge a Friend
-            </h2>
-            <p className="text-sm text-blue-100">
-              Take any mock, then challenge a friend to beat your score — see exactly how you each did, question by question.
-            </p>
           </button>
         </main>
       </div>
@@ -4472,24 +4532,41 @@ function StudentApp() {
   // list a student sees is only ever one section's mocks, not every
   // section's mocks mixed together.
   if (typeFilter === MOCK_TYPES.SECTIONAL && !sectionFilter) {
+    const exam = EXAMS[examFilter] || EXAMS[DEFAULT_EXAM];
+    const theme = EXAM_THEME[exam.key];
     return (
-      <div className="min-h-screen bg-slate-50">
-        <header className="bg-white border-b border-slate-200 px-6 py-4">
-          <button onClick={backToType} className="text-sm text-slate-500 mb-2">← Back</button>
-          <h1 className="text-base font-semibold text-slate-800">Sectional Mocks</h1>
-          <p className="text-xs text-slate-400">Pick a section</p>
-        </header>
-        <main className="p-6 max-w-3xl mx-auto">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50">
+        <div className={`relative overflow-hidden bg-gradient-to-br ${theme.gradient} text-white px-6 py-10 sm:py-14`}>
+          <div className="absolute -right-16 -top-16 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="relative max-w-5xl mx-auto">
+            <button onClick={backToType} className="text-sm text-white/80 hover:text-white mb-4 inline-flex items-center gap-1 transition-colors">
+              ← Back
+            </button>
+            <h1 className="text-xl sm:text-2xl font-bold mb-1">Sectional Mocks</h1>
+            <p className="text-sm text-white/70">Pick a section to practice</p>
+          </div>
+        </div>
+        <main className="max-w-5xl mx-auto px-6 -mt-6 pb-16 relative">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-8">
             {sectionCounts.map((s) => (
               <button
                 key={s.key}
                 onClick={() => chooseSection(s.key)}
                 disabled={s.count === 0}
-                className="bg-white border border-slate-200 rounded-2xl p-6 text-left hover:border-blue-300 hover:shadow-sm transition-all disabled:opacity-40 disabled:hover:border-slate-200 disabled:hover:shadow-none"
+                className={`group relative bg-white border border-slate-200 rounded-3xl p-6 text-left shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden disabled:opacity-40 disabled:hover:shadow-sm disabled:hover:translate-y-0 ${theme.ring}`}
               >
-                <h2 className="text-base font-semibold text-slate-800 mb-1">{s.label}</h2>
-                <span className="text-sm font-medium text-blue-800">{s.count} test{s.count === 1 ? "" : "s"} available →</span>
+                <div className={`absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r ${theme.gradient}`} />
+                <h2 className="text-base font-bold text-slate-800 mb-3">{s.label}</h2>
+                <div className="flex items-center justify-between">
+                  <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${theme.badgeBg}`}>
+                    {s.count} test{s.count === 1 ? "" : "s"} available
+                  </span>
+                  <span
+                    className={`inline-flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br ${theme.gradient} text-white group-hover:scale-110 transition-transform`}
+                  >
+                    <ArrowRight size={15} />
+                  </span>
+                </div>
               </button>
             ))}
           </div>
@@ -4500,45 +4577,52 @@ function StudentApp() {
 
   // view === 'list' — only mocks of the chosen type (and, for Sectional, the
   // chosen section)
-  return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="bg-white border-b border-slate-200 px-6 py-4">
-        <button
-          onClick={typeFilter === MOCK_TYPES.SECTIONAL ? backToSectionPicker : backToType}
-          className="text-sm text-slate-500 mb-2"
-        >
-          ← Back
-        </button>
-        <h1 className="text-base font-semibold text-slate-800">
-          {typeFilter === "all"
-            ? "Pick a mock to challenge a friend"
-            : typeFilter === MOCK_TYPES.SECTIONAL
-            ? `Sectional Mocks — ${sectionLabel(sectionFilter)}`
-            : "Full Mocks"}
-        </h1>
-        <p className="text-xs text-slate-400">{listForType.length} test{listForType.length === 1 ? "" : "s"} available</p>
-      </header>
+  {
+    const exam = EXAMS[examFilter] || EXAMS[DEFAULT_EXAM];
+    const theme = EXAM_THEME[exam.key];
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50">
+        <div className={`relative overflow-hidden bg-gradient-to-br ${theme.gradient} text-white px-6 py-10 sm:py-14`}>
+          <div className="absolute -right-16 -top-16 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="relative max-w-5xl mx-auto">
+            <button
+              onClick={typeFilter === MOCK_TYPES.SECTIONAL ? backToSectionPicker : backToType}
+              className="text-sm text-white/80 hover:text-white mb-4 inline-flex items-center gap-1 transition-colors"
+            >
+              ← Back
+            </button>
+            <h1 className="text-xl sm:text-2xl font-bold mb-1">
+              {typeFilter === "all"
+                ? "Pick a mock to challenge a friend"
+                : typeFilter === MOCK_TYPES.SECTIONAL
+                ? `Sectional Mocks — ${sectionLabel(sectionFilter)}`
+                : "Full Mocks"}
+            </h1>
+            <p className="text-sm text-white/70">{listForType.length} test{listForType.length === 1 ? "" : "s"} available</p>
+          </div>
+        </div>
 
-      <main className="p-6 max-w-5xl mx-auto">
-        {typeFilter === "all" && listForType.length > 0 && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5 text-xs text-blue-800 mb-4">
-            Take any test below, then use "Create Challenge Link" on your results screen to send it to a friend.
-          </div>
-        )}
-        {listForType.length === 0 ? (
-          <div className="bg-white border border-dashed border-slate-200 rounded-xl p-12 text-center text-sm text-slate-400">
-            No {typeFilter === MOCK_TYPES.SECTIONAL ? "sectional" : typeFilter === MOCK_TYPES.FULL ? "full" : ""} tests are available right now — check back soon.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {listForType.map((m) => (
-              <StudentMockCard key={m.id} mock={m} onStart={openInstructions} />
-            ))}
-          </div>
-        )}
-      </main>
-    </div>
-  );
+        <main className="max-w-5xl mx-auto px-6 -mt-6 pb-16 relative">
+          {typeFilter === "all" && listForType.length > 0 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5 text-xs text-blue-800 mb-4 mt-8">
+              Take any test below, then use "Create Challenge Link" on your results screen to send it to a friend.
+            </div>
+          )}
+          {listForType.length === 0 ? (
+            <div className="bg-white border border-dashed border-slate-200 rounded-xl p-12 text-center text-sm text-slate-400 mt-8">
+              No {typeFilter === MOCK_TYPES.SECTIONAL ? "sectional" : typeFilter === MOCK_TYPES.FULL ? "full" : ""} tests are available right now — check back soon.
+            </div>
+          ) : (
+            <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 ${typeFilter === "all" ? "" : "mt-8"}`}>
+              {listForType.map((m) => (
+                <StudentMockCard key={m.id} mock={m} onStart={openInstructions} />
+              ))}
+            </div>
+          )}
+        </main>
+      </div>
+    );
+  }
 }
 
 // ============================================================================
