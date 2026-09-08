@@ -4045,6 +4045,13 @@ function ProgressView({ attempts, mocksIndex, onBack, onPractice }) {
     .sort((a, b) => a.accuracy - b.accuracy)
     .map((t) => t.topic);
 
+  // Full Mock and Sectional Mock are different beasts — a sectional attempt
+  // only ever touches one section, so blending the two into one trend/
+  // subject-accuracy view makes both harder to read. Split by mock type and
+  // give each its own panel instead.
+  const fullAttempts = attempts.filter((a) => getMockType(mocksIndex.find((m) => m.id === a.mockId)) === MOCK_TYPES.FULL);
+  const sectionalAttempts = attempts.filter((a) => getMockType(mocksIndex.find((m) => m.id === a.mockId)) === MOCK_TYPES.SECTIONAL);
+
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-start justify-between">
@@ -4069,7 +4076,27 @@ function ProgressView({ attempts, mocksIndex, onBack, onPractice }) {
           </div>
         ) : (
           <>
-            <ExamPerformancePanel attempts={attempts} mocksIndex={mocksIndex} />
+            <h2 className="text-sm font-semibold text-slate-700 mb-3 px-1">Full Mock performance</h2>
+            {fullAttempts.length > 0 ? (
+              <div className="mb-6">
+                <ExamPerformancePanel attempts={fullAttempts} mocksIndex={mocksIndex} />
+              </div>
+            ) : (
+              <div className="bg-white border border-dashed border-slate-200 rounded-xl p-8 text-center text-sm text-slate-400 mb-6">
+                No Full Mocks attempted yet.
+              </div>
+            )}
+
+            <h2 className="text-sm font-semibold text-slate-700 mb-3 px-1">Sectional Mock performance</h2>
+            {sectionalAttempts.length > 0 ? (
+              <div className="mb-6">
+                <ExamPerformancePanel attempts={sectionalAttempts} mocksIndex={mocksIndex} />
+              </div>
+            ) : (
+              <div className="bg-white border border-dashed border-slate-200 rounded-xl p-8 text-center text-sm text-slate-400 mb-6">
+                No Sectional Mocks attempted yet.
+              </div>
+            )}
 
             {weakTopics.length > 0 && (
               <div className="bg-white border border-slate-200 rounded-xl p-5 mb-4">
