@@ -3169,6 +3169,88 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
   );
 }
 
+// A single practice question, added or edited by hand — the manual
+// alternative to pasting JSON. Unlike QuestionForm (mock questions, where
+// topic is optional metadata), topic is the first field and required here:
+// it's the only thing a student browses Practice Ground by, and it's also
+// what a future "practice this topic" link from the AI analysis will match
+// against, so it has to be filled in deliberately, not left blank.
+function PracticeQuestionForm({ initial, onSave, onCancel }) {
+  const [q, setQ] = useState(
+    initial || { id: generateId("pq"), topic: "", difficulty: "Easy", text: "", options: ["", "", "", ""], answer: 0, explanation: "" }
+  );
+  const canSave = q.topic.trim() && q.text.trim() && q.options.every((o) => o.trim()) && q.explanation.trim();
+  return (
+    <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-2.5">
+      <div className="flex items-center gap-2">
+        <div className="flex-1">
+          <label className="block text-[11px] font-medium text-slate-500 mb-1">Topic (required)</label>
+          <input
+            value={q.topic}
+            onChange={(e) => setQ({ ...q, topic: e.target.value })}
+            placeholder="e.g. Height and Distance"
+            className="w-full text-sm border border-slate-200 rounded-md px-3 py-1.5"
+          />
+        </div>
+        <div>
+          <label className="block text-[11px] font-medium text-slate-500 mb-1">Difficulty</label>
+          <select
+            value={q.difficulty}
+            onChange={(e) => setQ({ ...q, difficulty: e.target.value })}
+            className="text-sm border border-slate-200 rounded-md px-3 py-1.5"
+          >
+            {PRACTICE_DIFFICULTIES.map((d) => (
+              <option key={d}>{d}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <textarea
+        value={q.text}
+        onChange={(e) => setQ({ ...q, text: e.target.value })}
+        placeholder="Question text"
+        rows={2}
+        className="w-full text-sm border border-slate-200 rounded-md px-3 py-2"
+      />
+      {q.options.map((opt, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <input type="radio" checked={q.answer === i} onChange={() => setQ({ ...q, answer: i })} title="Mark as correct answer" />
+          <span className="text-xs font-medium text-slate-400 w-4">{LETTERS[i]}</span>
+          <input
+            value={opt}
+            onChange={(e) => {
+              const options = [...q.options];
+              options[i] = e.target.value;
+              setQ({ ...q, options });
+            }}
+            placeholder={`Option ${LETTERS[i]}`}
+            className="flex-1 text-sm border border-slate-200 rounded-md px-3 py-1.5"
+          />
+        </div>
+      ))}
+      <textarea
+        value={q.explanation}
+        onChange={(e) => setQ({ ...q, explanation: e.target.value })}
+        placeholder="Explanation"
+        rows={2}
+        className="w-full text-sm border border-slate-200 rounded-md px-3 py-2"
+      />
+      <div className="flex justify-end gap-2 pt-1">
+        <button onClick={onCancel} className="text-xs px-3 py-1.5 rounded-md border border-slate-200 text-slate-600">
+          Cancel
+        </button>
+        <button
+          onClick={() => canSave && onSave({ ...q, topic: q.topic.trim() })}
+          disabled={!canSave}
+          className="text-xs px-3 py-1.5 rounded-md bg-blue-900 text-white disabled:opacity-40"
+        >
+          Save question
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ============================================================================
 // PRACTICE BANK (admin) — upload/manage the standalone Practice Ground
 // question bank, per exam/topic/difficulty. Deliberately simpler than
@@ -3190,6 +3272,8 @@ function PracticeBankView() {
   const [enabled, setEnabled] = useState(false);
   const [enabledLoaded, setEnabledLoaded] = useState(false);
   const [togglingEnabled, setTogglingEnabled] = useState(false);
+  const [addingNew, setAddingNew] = useState(false);
+  const [editingQuestion, setEditingQuestion] = useState(null);
 
   const refresh = useCallback(async () => {
     setLoaded(false);
@@ -3255,6 +3339,13 @@ function PracticeBankView() {
     await deletePracticeQuestion(deleteTarget.id);
     setDeleteTarget(null);
     refresh();
+  }
+
+  async function saveManualQuestion(question) {
+    await savePracticeQuestions(examKey, [question]);
+    setAddingNew(false);
+    setEditingQuestion(null);
+    await refresh();
   }
 
   const filtered = questions.filter((q) => !filterTopic || q.topic.toLowerCase().includes(filterTopic.toLowerCase()));
@@ -3345,16 +3436,40 @@ function PracticeBankView() {
         <h3 className="text-sm font-semibold text-slate-700">
           {questions.length} question{questions.length === 1 ? "" : "s"} in {EXAMS[examKey].label} Practice Ground
         </h3>
-        <div className="relative w-56">
-          <Search size={13} className="absolute left-2.5 top-2.5 text-slate-400" />
-          <input
-            value={filterTopic}
-            onChange={(e) => setFilterTopic(e.target.value)}
-            placeholder="Filter by topic..."
-            className="w-full text-xs border border-slate-200 rounded-md pl-7 pr-2 py-1.5"
-          />
+        <div className="flex items-center gap-2">
+          <div className="relative w-56">
+            <Search size={13} className="absolute left-2.5 top-2.5 text-slate-400" />
+            <input
+              value={filterTopic}
+              onChange={(e) => setFilterTopic(e.target.value)}
+              placeholder="Filter by topic..."
+              className="w-full text-xs border border-slate-200 rounded-md pl-7 pr-2 py-1.5"
+            />
+          </div>
+          <button
+            onClick={() => {
+              setEditingQuestion(null);
+              setAddingNew(true);
+            }}
+            className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-md border border-slate-200 text-slate-600 shrink-0"
+          >
+            <Plus size={12} /> Add single question
+          </button>
         </div>
       </div>
+
+      {(addingNew || editingQuestion) && (
+        <div className="mb-5">
+          <PracticeQuestionForm
+            initial={editingQuestion}
+            onSave={saveManualQuestion}
+            onCancel={() => {
+              setAddingNew(false);
+              setEditingQuestion(null);
+            }}
+          />
+        </div>
+      )}
 
       {!loaded ? (
         <div className="text-sm text-slate-400">Loading...</div>
@@ -3376,14 +3491,27 @@ function PracticeBankView() {
               </div>
               <div className="divide-y divide-slate-100">
                 {qs.map((q) => (
-                  <div key={q.id} className="flex items-center gap-3 px-4 py-2.5">
+                  <div
+                    key={q.id}
+                    onClick={() => {
+                      setAddingNew(false);
+                      setEditingQuestion(q);
+                    }}
+                    className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-slate-50"
+                  >
                     <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border shrink-0 ${PRACTICE_DIFFICULTY_COLORS[q.difficulty]}`}>
                       {q.difficulty}
                     </span>
                     <span className="flex-1 min-w-0 text-sm text-slate-700 truncate">
                       <MathText text={q.text} />
                     </span>
-                    <button onClick={() => setDeleteTarget(q)} className="text-slate-300 hover:text-red-500 shrink-0">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteTarget(q);
+                      }}
+                      className="text-slate-300 hover:text-red-500 shrink-0"
+                    >
                       <Trash2 size={14} />
                     </button>
                   </div>
