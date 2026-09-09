@@ -6,6 +6,29 @@
 // results screen, only from the admin panel's own "Run" flow.
 import { createClient } from "@supabase/supabase-js";
 
+// Free-tier Gemini models get deprioritized under load and return a 503
+// ("currently experiencing high demand") fairly often — that's Google's
+// side, not a bug here, but making the user manually click "Try again"
+// three times for something this transient is a bad experience. Retry a
+// couple of times with a short backoff before actually surfacing an error.
+export const config = { maxDuration: 60 };
+
+async function callGeminiWithRetry(url, body, maxAttempts = 3) {
+  let res;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) return res;
+    const retryable = res.status === 503 || res.status === 429;
+    if (!retryable || attempt === maxAttempts) return res;
+    await new Promise((r) => setTimeout(r, attempt * 1500)); // 1.5s, then 3s
+  }
+  return res;
+}
+
 const RESPONSE_SCHEMA = {
   type: "OBJECT",
   properties: {
@@ -127,25 +150,25 @@ export default async function handler(req, res) {
 
   try {
     const model = process.env.GEMINI_MODEL || "gemini-3.6-flash";
-    const geminiRes = await fetch(
+    const geminiRes = await callGeminiWithRetry(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
       {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: buildPrompt(attempt) }] }],
-          generationConfig: {
-            responseMimeType: "application/json",
-            responseSchema: RESPONSE_SCHEMA,
-            temperature: 0.4,
-          },
-        }),
+        contents: [{ parts: [{ text: buildPrompt(attempt) }] }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: RESPONSE_SCHEMA,
+          temperature: 0.4,
+        },
       }
     );
 
     if (!geminiRes.ok) {
       const errText = await geminiRes.text().catch(() => "");
-      res.status(502).json({ error: `AI service error (${geminiRes.status}). ${errText.slice(0, 300)}` });
+      const friendly =
+        geminiRes.status === 503 || geminiRes.status === 429
+          ? "The AI service is overloaded right now even after a few retries — this is Google's side, not this app. Wait a minute and try again."
+          : `AI service error (${geminiRes.status}). ${errText.slice(0, 300)}`;
+      res.status(502).json({ error: friendly });
       return;
     }
 
