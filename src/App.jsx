@@ -2232,6 +2232,25 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
     reviewSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
+  // PDF export (admin only) — just the browser's own print-to-PDF, no new
+  // dependency. Forces every collapsed review/AI card open and clears any
+  // review filter first, so the printed page has the complete answer sheet
+  // rather than whatever happened to be collapsed/filtered on screen.
+  const [isPrinting, setIsPrinting] = useState(false);
+  useEffect(() => {
+    function resetAfterPrint() {
+      setIsPrinting(false);
+    }
+    window.addEventListener("afterprint", resetAfterPrint);
+    return () => window.removeEventListener("afterprint", resetAfterPrint);
+  }, []);
+  function handleDownloadPdf() {
+    setReviewFilter("all");
+    setReviewSectionKey(null);
+    setIsPrinting(true);
+    requestAnimationFrame(() => requestAnimationFrame(() => window.print()));
+  }
+
   // In composite mode `list` is every question from every section, flattened
   // into one navigable sequence (tagged with which section each came from,
   // purely for display/grouping) — `qIdx` walks this directly, with no
@@ -2539,6 +2558,17 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 py-8 px-4 sm:px-8">
         <div className="max-w-6xl mx-auto space-y-6">
+          {adminMode && (
+            <div className="print:hidden flex justify-end">
+              <button
+                onClick={handleDownloadPdf}
+                className="inline-flex items-center gap-2 bg-white border border-slate-200 text-slate-700 text-sm font-medium px-4 py-2 rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                <Download size={14} /> Download PDF (answer sheet + AI analysis)
+              </button>
+            </div>
+          )}
+
           {/* HERO — score, live stats, and per-section drill-down all in
               one interactive card (overall vs. section is a tab switch, not
               two separate sections repeating the same list). */}
@@ -2574,6 +2604,7 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
               incorrect={incorrect}
               skipped={skipped}
               parTimeFor={parTimeFor}
+              isPrinting={isPrinting}
             />
           )}
 
@@ -2625,7 +2656,7 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
                         setReviewFilter("all");
                         setReviewSectionKey(null);
                       }}
-                      className="text-xs text-blue-700 font-medium"
+                      className="print:hidden text-xs text-blue-700 font-medium"
                     >
                       Show all →
                     </button>
@@ -2650,6 +2681,7 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
                         qNumber={i + 1}
                         sel={answers[qq.id]}
                         timeInfo={timeInfoFor(qq, s.key)}
+                        forceExpanded={isPrinting}
                       />
                     ))}
                 </div>
@@ -2659,8 +2691,9 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
 
           {/* SHARE & COMPETE — secondary to the analysis above (that's the
               point of the page), and laid out so it never leaves empty grid
-              cells regardless of how many of these cards exist. */}
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
+              cells regardless of how many of these cards exist. Not part of
+              the answer sheet / AI analysis PDF export, so hidden on print. */}
+          <div className="print:hidden grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
             <div className="lg:col-span-3">
               <ShareResultCard mock={mock} score={score} totalMarks={mock.totalMarks} examLabel={getExam(mock).label} />
             </div>
@@ -3345,7 +3378,7 @@ function AdminPanel() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex text-slate-800">
-      <aside className="w-56 bg-slate-900 text-slate-300 flex flex-col shrink-0">
+      <aside className="print:hidden w-56 bg-slate-900 text-slate-300 flex flex-col shrink-0">
         <div className="px-4 py-5 text-white font-semibold text-sm border-b border-slate-800">The 100 Percentiler — Admin</div>
         <nav className="flex-1 py-3">
           {NAV.map((n) => (
@@ -3373,7 +3406,7 @@ function AdminPanel() {
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="bg-white border-b border-slate-200 px-6 py-3 flex items-center gap-3">
+        <header className="print:hidden bg-white border-b border-slate-200 px-6 py-3 flex items-center gap-3">
           {["editor", "section", "preview", "run"].includes(view) && (
             <button
               onClick={() => (view === "section" ? setView("editor") : goList())}
@@ -3395,7 +3428,7 @@ function AdminPanel() {
           </h1>
         </header>
 
-        <main className="flex-1 p-6 overflow-auto">
+        <main className="flex-1 p-6 overflow-auto print:overflow-visible print:h-auto print:p-0">
           {view === "dashboard" && (
             <DashboardView mocksIndex={mocksIndex} questionCounts={questionsCache} onGoList={goList} onCreateNew={createMock} />
           )}
@@ -3825,7 +3858,7 @@ function ResultsHero({ mock, score, correct, incorrect, skipped, percentile, sec
         <h2 className="text-lg sm:text-xl font-semibold mb-5">{mock.title}</h2>
 
         {sections.length > 1 && (
-          <div className="flex flex-wrap gap-2 mb-6">
+          <div className="print:hidden flex flex-wrap gap-2 mb-6">
             <button
               onClick={() => selectTab("overall")}
               className={`text-xs font-medium px-3.5 py-1.5 rounded-full border transition-all duration-200 hover:scale-105 ${
@@ -3928,7 +3961,7 @@ function ResultsHero({ mock, score, correct, incorrect, skipped, percentile, sec
           )}
         </div>
 
-        <button onClick={onExit} className="mt-6 text-sm px-5 py-2.5 rounded-lg bg-white text-blue-950 font-medium hover:bg-blue-50 transition-colors">
+        <button onClick={onExit} className="print:hidden mt-6 text-sm px-5 py-2.5 rounded-lg bg-white text-blue-950 font-medium hover:bg-blue-50 transition-colors">
           Back to admin panel
         </button>
       </div>
@@ -3988,7 +4021,7 @@ function buildAnalysisPayload({ mock, sections, questions, answers, timeSpent, t
   };
 }
 
-function AIAnalysisPanel(props) {
+function AIAnalysisPanel({ isPrinting, ...payloadProps }) {
   const [state, setState] = useState("idle"); // 'idle' | 'loading' | 'done' | 'error'
   const [result, setResult] = useState(null);
   const [errorMsg, setErrorMsg] = useState("");
@@ -3997,7 +4030,7 @@ function AIAnalysisPanel(props) {
     setState("loading");
     setErrorMsg("");
     try {
-      const payload = buildAnalysisPayload(props);
+      const payload = buildAnalysisPayload(payloadProps);
       const data = await analyzeAttempt(payload);
       setResult(data);
       setState("done");
@@ -4021,21 +4054,21 @@ function AIAnalysisPanel(props) {
       {state === "idle" && (
         <button
           onClick={runAnalysis}
-          className="inline-flex items-center gap-2 bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
+          className="print:hidden inline-flex items-center gap-2 bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
         >
           <Sparkles size={14} /> Analyze with AI
         </button>
       )}
 
       {state === "loading" && (
-        <div className="flex items-center gap-2 text-sm text-slate-500">
+        <div className="print:hidden flex items-center gap-2 text-sm text-slate-500">
           <div className="w-4 h-4 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin" />
           Analyzing this attempt — this can take up to a minute...
         </div>
       )}
 
       {state === "error" && (
-        <div className="text-sm text-red-600">
+        <div className="print:hidden text-sm text-red-600">
           {errorMsg}
           <button onClick={runAnalysis} className="ml-3 text-indigo-600 font-medium underline">
             Try again
@@ -4045,7 +4078,7 @@ function AIAnalysisPanel(props) {
 
       {state === "done" && result && (
         <div className="space-y-5 animate-fade-slide">
-          <p className="text-sm text-slate-700 leading-relaxed">{result.overallSummary}</p>
+          <p className="text-sm text-slate-700 leading-relaxed"><MathText text={result.overallSummary} /></p>
 
           {result.mistakePatterns?.length > 0 && (
             <div>
@@ -4059,7 +4092,7 @@ function AIAnalysisPanel(props) {
                         ({m.questionsAffected} question{m.questionsAffected === 1 ? "" : "s"})
                       </span>
                     </div>
-                    <div className="text-xs text-red-700 mt-1">{m.whatWentWrong}</div>
+                    <div className="text-xs text-red-700 mt-1"><MathText text={m.whatWentWrong} /></div>
                   </div>
                 ))}
               </div>
@@ -4073,9 +4106,9 @@ function AIAnalysisPanel(props) {
                 {result.weakTopics.map((w, i) => (
                   <div key={i} className="bg-amber-50 border border-amber-100 rounded-lg p-3">
                     <div className="text-sm font-medium text-amber-800">{w.topic}</div>
-                    <div className="text-xs text-amber-700 mt-1">{w.why}</div>
+                    <div className="text-xs text-amber-700 mt-1"><MathText text={w.why} /></div>
                     <div className="text-xs text-amber-900 mt-1.5">
-                      <span className="font-medium">How to fix:</span> {w.howToFix}
+                      <span className="font-medium">How to fix:</span> <MathText text={w.howToFix} />
                     </div>
                   </div>
                 ))}
@@ -4090,7 +4123,7 @@ function AIAnalysisPanel(props) {
                 {result.strongTopics.map((s, i) => (
                   <div key={i} className="bg-emerald-50 border border-emerald-100 rounded-lg p-3">
                     <div className="text-sm font-medium text-emerald-800">{s.topic}</div>
-                    <div className="text-xs text-emerald-700 mt-1">{s.why}</div>
+                    <div className="text-xs text-emerald-700 mt-1"><MathText text={s.why} /></div>
                   </div>
                 ))}
               </div>
@@ -4102,7 +4135,7 @@ function AIAnalysisPanel(props) {
               <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Time management</h3>
               <ul className="list-disc list-inside space-y-1 text-xs text-slate-600">
                 {result.timeManagement.map((t, i) => (
-                  <li key={i}>{t}</li>
+                  <li key={i}><MathText text={t} /></li>
                 ))}
               </ul>
             </div>
@@ -4115,7 +4148,7 @@ function AIAnalysisPanel(props) {
                 {result.focusPlan.map((f, i) => (
                   <li key={i} className="flex items-start gap-2 text-sm text-slate-700">
                     <CheckCircle2 size={14} className="text-indigo-500 mt-0.5 shrink-0" />
-                    {f}
+                    <MathText text={f} />
                   </li>
                 ))}
               </ul>
@@ -4129,13 +4162,13 @@ function AIAnalysisPanel(props) {
               </h3>
               <div className="space-y-1.5">
                 {result.questionBreakdown.map((q, i) => (
-                  <AIQuestionBreakdownCard key={i} q={q} />
+                  <AIQuestionBreakdownCard key={i} q={q} forceExpanded={isPrinting} />
                 ))}
               </div>
             </div>
           )}
 
-          <button onClick={runAnalysis} className="text-xs text-indigo-600 font-medium">
+          <button onClick={runAnalysis} className="print:hidden text-xs text-indigo-600 font-medium">
             Re-run analysis →
           </button>
         </div>
@@ -4146,12 +4179,15 @@ function AIAnalysisPanel(props) {
 
 // One AI-written entry for a single wrong/skipped question — collapsed to
 // topic + one-line summary by default (there can be dozens of these), full
-// breakdown (correct answer, the exact formula/concept, how to approach it)
-// on click. Same collapse-by-default pattern as AnswerReviewCard, for the
-// same reason: dozens of always-expanded cards would be a wall, not a list.
-function AIQuestionBreakdownCard({ q }) {
+// breakdown (correct answer, the exact formula/concept, the actual worked
+// solution) on click. Same collapse-by-default pattern as AnswerReviewCard,
+// for the same reason: dozens of always-expanded cards would be a wall, not
+// a list. `forceExpanded` overrides the collapsed state for PDF export, so
+// the printed report shows every question fully rather than one-line rows.
+function AIQuestionBreakdownCard({ q, forceExpanded }) {
   const [expanded, setExpanded] = useState(false);
   const isSkipped = q.status === "skipped";
+  const open = expanded || forceExpanded;
   return (
     <div className="border border-slate-200 rounded-lg overflow-hidden">
       <button onClick={() => setExpanded((e) => !e)} className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-slate-50">
@@ -4164,26 +4200,28 @@ function AIQuestionBreakdownCard({ q }) {
         </span>
         <span className="text-xs text-slate-400 shrink-0">{q.topic}</span>
         <span className="text-sm text-slate-700 truncate flex-1">{q.questionSummary}</span>
-        {expanded ? <ChevronUp size={14} className="text-slate-400 shrink-0" /> : <ChevronDown size={14} className="text-slate-400 shrink-0" />}
+        <span className="print:hidden shrink-0">
+          {open ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
+        </span>
       </button>
-      {expanded && (
+      {open && (
         <div className="px-3 pb-3 pt-1 space-y-2 text-xs bg-slate-50 border-t border-slate-200">
           <div className="text-slate-500">{q.section}</div>
           <div>
             <span className="font-medium text-slate-600">What went wrong: </span>
-            <span className="text-slate-700">{q.whatWentWrong}</span>
+            <span className="text-slate-700"><MathText text={q.whatWentWrong} /></span>
           </div>
           <div>
             <span className="font-medium text-slate-600">Correct answer: </span>
-            <span className="text-slate-700">{q.correctAnswerText}</span>
+            <span className="text-slate-700"><MathText text={q.correctAnswerText} /></span>
           </div>
           <div className="bg-indigo-50 border border-indigo-100 rounded-md p-2">
             <span className="font-medium text-indigo-700">Formula / concept to remember: </span>
-            <span className="text-indigo-800">{q.keyFormulaOrConcept}</span>
+            <span className="text-indigo-800"><MathText text={q.keyFormulaOrConcept} /></span>
           </div>
           <div>
-            <span className="font-medium text-slate-600">How to approach it: </span>
-            <span className="text-slate-700">{q.howToApproach}</span>
+            <span className="font-medium text-slate-600">Worked solution: </span>
+            <span className="text-slate-700"><MathText text={q.workedSolution} /></span>
           </div>
         </div>
       )}
@@ -4197,8 +4235,9 @@ function AIQuestionBreakdownCard({ q }) {
 // folded directly into this row rather than living in its own separate
 // section, since "how long did I take on this one" and "did I get this one
 // right" are really the same question about the same question.
-function AnswerReviewCard({ qq, sectionLabel, qNumber, sel, timeInfo }) {
+function AnswerReviewCard({ qq, sectionLabel, qNumber, sel, timeInfo, forceExpanded }) {
   const [expanded, setExpanded] = useState(false);
+  const open = expanded || forceExpanded;
   const isCorrect = sel === qq.answer;
   const isSkipped = sel === undefined;
   return (
@@ -4221,9 +4260,9 @@ function AnswerReviewCard({ qq, sectionLabel, qNumber, sel, timeInfo }) {
         <span className={`hidden md:inline-block shrink-0 text-[11px] font-medium px-2 py-0.5 rounded-full border ${timeInfo.cls}`}>
           {timeInfo.label}
         </span>
-        <ChevronDown size={16} className={`shrink-0 text-slate-400 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`} />
+        <ChevronDown size={16} className={`print:hidden shrink-0 text-slate-400 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
       </button>
-      {expanded && (
+      {open && (
         <div className="px-5 pb-5 pt-1 border-t border-slate-100 text-left">
           <span className={`md:hidden inline-block mb-3 text-[11px] font-medium px-2 py-0.5 rounded-full border ${timeInfo.cls}`}>
             {timeInfo.label}

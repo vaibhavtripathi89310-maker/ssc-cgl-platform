@@ -30,3 +30,14 @@ body {
 .animate-fade-slide {
   animation: fadeSlideIn 0.25s ease-out;
 }
+
+/* PDF export (results screen "Download PDF") is just the browser's own
+   print-to-PDF — no library. Browsers strip background colors/badges by
+   default when printing unless told otherwise, which would flatten every
+   correct/incorrect badge and highlight into invisible text-on-white. */
+@media print {
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}

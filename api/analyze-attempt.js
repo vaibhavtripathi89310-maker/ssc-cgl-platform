@@ -84,11 +84,11 @@ const RESPONSE_SCHEMA = {
           whatWentWrong: { type: "STRING" },
           correctAnswerText: { type: "STRING" },
           keyFormulaOrConcept: { type: "STRING" },
-          howToApproach: { type: "STRING" },
+          workedSolution: { type: "STRING" },
         },
         required: [
           "section", "topic", "questionSummary", "status", "whatWentWrong",
-          "correctAnswerText", "keyFormulaOrConcept", "howToApproach",
+          "correctAnswerText", "keyFormulaOrConcept", "workedSolution",
         ],
       },
     },
@@ -100,6 +100,10 @@ function buildPrompt(data) {
   return `You are an expert exam coach reviewing one student's completed mock test attempt in detail.
 
 Write your entire analysis in plain, simple, everyday English — no exam jargon, no vague generic advice. Be specific: reference the actual topics and question patterns from the data below, not generic tips like "practice more." Be honest but encouraging, like a good tutor who wants the student to improve.
+
+CRITICAL RULE — never give abstract advice without the concrete result. If a question involves any calculation, do not just name the formula or say "apply the correct method" — actually work through the calculation with the real numbers from that exact question and state the final correct answer/value you arrive at. The student needs to see the actual solved question in front of them, not just be told what topic to study.
+
+MATH NOTATION — do not use LaTeX or dollar-sign math mode ($...$) anywhere, ever. Write all math as plain text using exactly this syntax: powers as x^2 or x^(2n+1); subscripts as x_1 or D_n; square roots as sqrt(x) or sqrt(a+2*sqrt(b)) — never \\sqrt or curly braces after it; fractions as a/b or (a+b)/(c-d); only these specific backslash symbols are allowed: \\pi \\theta \\alpha \\delta \\times \\div \\le \\ge \\ne \\pm \\infty. Nothing else gets a backslash, and nothing ever gets wrapped in $ signs or \\( \\) or \\[ \\].
 
 Exam: ${data.examLabel}
 Mock: ${data.mockTitle}
@@ -125,7 +129,7 @@ Using only this data, produce:
 4. strongTopics — topics the student is genuinely doing well in, and why (e.g. fast and accurate).
 5. timeManagement — specific observations about pacing (questions rushed into wrong answers, questions where too much time was spent even though the answer was correct, sections that ran short or long).
 6. focusPlan — a short ordered list (4-6 items) of the single most useful next actions for this student before their next attempt.
-7. questionBreakdown — THE MOST IMPORTANT PART. Go through every single question listed in "Questions the student got wrong or skipped" above, one at a time, in the same order — do not group them, do not summarize multiple questions into one entry, do not skip any of them, even if two questions look similar. For each one give: section, topic, questionSummary (one sentence identifying which question this is), status ("incorrect" or "skipped"), whatWentWrong (the specific reasoning error if incorrect, or why this was a winnable question worth attempting if skipped — reference the actual explanation text given), correctAnswerText, keyFormulaOrConcept (name the exact formula, rule, or method needed to solve this specific question — this is the single most useful field, be precise and concrete, not vague), and howToApproach (a short step-by-step method for solving this type of question quickly next time).`;
+7. questionBreakdown — THE MOST IMPORTANT PART. Go through every single question listed in "Questions the student got wrong or skipped" above, one at a time, in the same order — do not group them, do not summarize multiple questions into one entry, do not skip any of them, even if two questions look similar. For each one give: section, topic, questionSummary (one sentence identifying which question this is), status ("incorrect" or "skipped"), whatWentWrong (the specific reasoning error if incorrect, or why this was a winnable question worth attempting if skipped — reference the actual explanation text given), correctAnswerText, keyFormulaOrConcept (name the exact formula/rule/method needed), and workedSolution — this is not advice, it is the actual worked-out solution to THIS specific question: show the real numbers/values from the question plugged into the formula, the intermediate steps, and the final computed result that matches correctAnswerText. If the question isn't a calculation (e.g. a vocabulary or grammar question), workedSolution should instead directly explain, using the actual words/options from the question, exactly why the correct option is right and why the student's option was wrong.`;
 }
 
 export default async function handler(req, res) {
