@@ -13,7 +13,7 @@ import { createClient } from "@supabase/supabase-js";
 // couple of times with a short backoff before actually surfacing an error.
 export const config = { maxDuration: 60 };
 
-async function callGeminiWithRetry(url, body, maxAttempts = 3) {
+async function callGeminiWithRetry(url, body, maxAttempts = 2) {
   let res;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     res = await fetch(url, {
@@ -70,8 +70,30 @@ const RESPONSE_SCHEMA = {
     },
     timeManagement: { type: "ARRAY", items: { type: "STRING" } },
     focusPlan: { type: "ARRAY", items: { type: "STRING" } },
+    // One entry per wrong/skipped question, no grouping or skipping any —
+    // this is the exhaustive, question-by-question part of the report.
+    questionBreakdown: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: {
+          section: { type: "STRING" },
+          topic: { type: "STRING" },
+          questionSummary: { type: "STRING" },
+          status: { type: "STRING" },
+          whatWentWrong: { type: "STRING" },
+          correctAnswerText: { type: "STRING" },
+          keyFormulaOrConcept: { type: "STRING" },
+          howToApproach: { type: "STRING" },
+        },
+        required: [
+          "section", "topic", "questionSummary", "status", "whatWentWrong",
+          "correctAnswerText", "keyFormulaOrConcept", "howToApproach",
+        ],
+      },
+    },
   },
-  required: ["overallSummary", "mistakePatterns", "weakTopics", "strongTopics", "timeManagement", "focusPlan"],
+  required: ["overallSummary", "mistakePatterns", "weakTopics", "strongTopics", "timeManagement", "focusPlan", "questionBreakdown"],
 };
 
 function buildPrompt(data) {
@@ -98,11 +120,12 @@ ${JSON.stringify(data.slowCorrectQuestions, null, 2)}
 
 Using only this data, produce:
 1. overallSummary — 2-4 sentences giving the big picture of how this attempt went.
-2. mistakePatterns — group the wrong/skipped questions into real patterns (e.g. "kept misreading negative signs in profit-loss questions", not just restating each question one by one). Include how many questions each pattern affected.
+2. mistakePatterns — a short, high-level grouping of the wrong/skipped questions into real recurring patterns (e.g. "kept misreading negative signs in profit-loss questions"), each with how many questions it affected. This is just the quick-scan overview — the exhaustive detail belongs in questionBreakdown below, so don't try to cover everything here.
 3. weakTopics — the topics that need the most work, each with why (the actual pattern causing errors there) and howToFix (a specific, actionable study suggestion, not generic).
 4. strongTopics — topics the student is genuinely doing well in, and why (e.g. fast and accurate).
 5. timeManagement — specific observations about pacing (questions rushed into wrong answers, questions where too much time was spent even though the answer was correct, sections that ran short or long).
-6. focusPlan — a short ordered list (4-6 items) of the single most useful next actions for this student before their next attempt.`;
+6. focusPlan — a short ordered list (4-6 items) of the single most useful next actions for this student before their next attempt.
+7. questionBreakdown — THE MOST IMPORTANT PART. Go through every single question listed in "Questions the student got wrong or skipped" above, one at a time, in the same order — do not group them, do not summarize multiple questions into one entry, do not skip any of them, even if two questions look similar. For each one give: section, topic, questionSummary (one sentence identifying which question this is), status ("incorrect" or "skipped"), whatWentWrong (the specific reasoning error if incorrect, or why this was a winnable question worth attempting if skipped — reference the actual explanation text given), correctAnswerText, keyFormulaOrConcept (name the exact formula, rule, or method needed to solve this specific question — this is the single most useful field, be precise and concrete, not vague), and howToApproach (a short step-by-step method for solving this type of question quickly next time).`;
 }
 
 export default async function handler(req, res) {
@@ -158,6 +181,10 @@ export default async function handler(req, res) {
           responseMimeType: "application/json",
           responseSchema: RESPONSE_SCHEMA,
           temperature: 0.4,
+          // A full question-by-question breakdown can run long for a mock
+          // with many wrong/skipped questions — give it real headroom so it
+          // doesn't get cut off mid-JSON.
+          maxOutputTokens: 32768,
         },
       }
     );
@@ -173,7 +200,8 @@ export default async function handler(req, res) {
     }
 
     const geminiData = await geminiRes.json();
-    const text = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text;
+    const candidate = geminiData?.candidates?.[0];
+    const text = candidate?.content?.parts?.[0]?.text;
     if (!text) {
       res.status(502).json({ error: "AI service returned an empty response." });
       return;
@@ -183,7 +211,11 @@ export default async function handler(req, res) {
     try {
       analysis = JSON.parse(text);
     } catch {
-      res.status(502).json({ error: "AI service returned malformed data." });
+      const hint =
+        candidate?.finishReason === "MAX_TOKENS"
+          ? " The report got cut off mid-way — this mock likely has too many wrong/skipped questions for one response. Try again, or ask to shorten the per-question breakdown."
+          : "";
+      res.status(502).json({ error: `AI service returned malformed data.${hint}` });
       return;
     }
 
