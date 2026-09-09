@@ -430,3 +430,19 @@ export async function deletePracticeQuestion(id) {
   const { error } = await supabase.from("practice_questions").delete().eq("id", id);
   if (error) throw error;
 }
+
+// A single global on/off switch for whether the Practice Ground card shows
+// up on the student side at all — stored server-side (not localStorage) so
+// toggling it actually controls what every student sees, not just this
+// browser. Defaults to hidden (false) if the row doesn't exist yet, which is
+// the safe default before admin has uploaded/reviewed any practice content.
+export async function loadPracticeGroundEnabled() {
+  const { data, error } = await supabase.from("app_settings").select("value").eq("key", "practice_ground_enabled").maybeSingle();
+  if (error) throw error;
+  return data?.value === true;
+}
+
+export async function setPracticeGroundEnabled(enabled) {
+  const { error } = await supabase.from("app_settings").upsert({ key: "practice_ground_enabled", value: enabled });
+  if (error) throw error;
+}

@@ -15,6 +15,7 @@ import {
   loadAttemptsInRange,
   loadPracticeTopicSummary, loadPracticeQuestions, loadAllPracticeQuestions,
   savePracticeQuestions, deletePracticeQuestion,
+  loadPracticeGroundEnabled, setPracticeGroundEnabled,
 } from "./lib/storage";
 import { signIn, signOut, getSession, onAuthStateChange } from "./lib/auth";
 import { analyzeAttempt } from "./lib/aiAnalysis";
@@ -3186,6 +3187,9 @@ function PracticeBankView() {
   const [filterTopic, setFilterTopic] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [loadError, setLoadError] = useState(false);
+  const [enabled, setEnabled] = useState(false);
+  const [enabledLoaded, setEnabledLoaded] = useState(false);
+  const [togglingEnabled, setTogglingEnabled] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoaded(false);
@@ -3202,6 +3206,30 @@ function PracticeBankView() {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        setEnabled(await loadPracticeGroundEnabled());
+      } catch {
+        // Leave it at the safe default (hidden) if this fails to load —
+        // never show the toggle as "on" when we couldn't actually confirm that.
+      } finally {
+        setEnabledLoaded(true);
+      }
+    })();
+  }, []);
+
+  async function toggleEnabled() {
+    const next = !enabled;
+    setTogglingEnabled(true);
+    try {
+      await setPracticeGroundEnabled(next);
+      setEnabled(next);
+    } finally {
+      setTogglingEnabled(false);
+    }
+  }
 
   function handleValidate() {
     return validatePracticeImportJSON(jsonText);
@@ -3238,6 +3266,30 @@ function PracticeBankView() {
 
   return (
     <div className="max-w-4xl">
+      <div className={`flex items-center justify-between gap-3 border rounded-lg px-4 py-3 mb-5 ${enabled ? "bg-emerald-50 border-emerald-200" : "bg-slate-100 border-slate-200"}`}>
+        <div>
+          <div className="text-sm font-medium text-slate-800">
+            {enabled ? "Practice Ground is visible to students" : "Practice Ground is hidden from students"}
+          </div>
+          <div className="text-xs text-slate-500 mt-0.5">
+            {enabled
+              ? "The Practice Ground card is showing on every exam's picker screen."
+              : "Students won't see the Practice Ground card anywhere until you turn this on."}
+          </div>
+        </div>
+        <button
+          onClick={toggleEnabled}
+          disabled={!enabledLoaded || togglingEnabled}
+          role="switch"
+          aria-checked={enabled}
+          className={`shrink-0 w-11 h-6 rounded-full relative transition-colors disabled:opacity-50 ${enabled ? "bg-emerald-500" : "bg-slate-300"}`}
+        >
+          <span
+            className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${enabled ? "translate-x-[22px]" : "translate-x-0.5"}`}
+          />
+        </button>
+      </div>
+
       <div className="flex gap-1.5 mb-4">
         {EXAM_LIST.map((exam) => (
           <button
@@ -5186,6 +5238,15 @@ function StudentApp() {
   const [attempts, setAttempts] = useState([]);
   const [practiceTopics, setPracticeTopics] = useState(null);
   const [practiceGroundSelection, setPracticeGroundSelection] = useState(null); // { topic, difficulty }
+  // Global admin-controlled switch (see PracticeBankView) — hidden by
+  // default (and while still loading) so it never flashes on and then
+  // disappears; only ever shown once we've confirmed it's actually on.
+  const [practiceGroundEnabled, setPracticeGroundEnabledLocal] = useState(false);
+  useEffect(() => {
+    loadPracticeGroundEnabled()
+      .then(setPracticeGroundEnabledLocal)
+      .catch(() => {});
+  }, []);
 
   // Same storage source as AdminPanel — no separate student store. Reloading
   // on every visit to a list screen (not just once on mount) means an admin
@@ -5475,9 +5536,10 @@ function StudentApp() {
 
         <main className="max-w-5xl mx-auto px-6 -mt-6 pb-16 relative">
           <p className="text-sm text-slate-500 mb-5 mt-8">What would you like to practice?</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-5">
+          <div className={`grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5 ${practiceGroundEnabled ? "lg:grid-cols-3" : ""}`}>
             <TypeSelectCard type={MOCK_TYPES.FULL} count={fullCount} onSelect={chooseType} exam={exam} />
             <TypeSelectCard type={MOCK_TYPES.SECTIONAL} count={sectionalCount} onSelect={chooseType} exam={exam} />
+            {practiceGroundEnabled && (
             <button
               onClick={openPracticeGround}
               className={`group relative bg-white border border-slate-200 rounded-3xl p-7 text-left shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden ${theme.ring}`}
@@ -5500,6 +5562,7 @@ function StudentApp() {
                 </span>
               </div>
             </button>
+            )}
           </div>
 
           <button
