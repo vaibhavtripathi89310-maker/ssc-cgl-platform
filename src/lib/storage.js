@@ -347,3 +347,86 @@ export async function setChallengeReaction(challengeId, role, reaction) {
   const { error } = await supabase.from("challenges").update({ [column]: reaction }).eq("id", challengeId);
   if (error) throw error;
 }
+
+// ============================================================================
+// PRACTICE GROUND — a standalone question bank per exam/topic/difficulty,
+// uploaded by admin independently of any mock (no mock_id, no timer, no
+// fixed question count). Not to be confused with loadQuestionsByTopics
+// above, which powers the older "practice your weak topics" feature by
+// reusing questions that already belong to a published mock — this is a
+// separate table admin fills in on purpose, specifically for open-ended
+// per-topic drilling at a chosen difficulty.
+// ============================================================================
+
+// Minimal columns only — this powers the topic/difficulty picker screen,
+// which just needs counts, not full question bodies. Aggregated client-side
+// for the same reason loadAttemptsInRange does: the row count here is never
+// going to be large enough to matter.
+export async function loadPracticeTopicSummary(exam) {
+  const { data, error } = await supabase.from("practice_questions").select("topic, difficulty").eq("exam", exam);
+  if (error) throw error;
+  const byTopic = {};
+  for (const r of data || []) {
+    if (!byTopic[r.topic]) byTopic[r.topic] = { topic: r.topic, Easy: 0, Medium: 0, Hard: 0 };
+    if (byTopic[r.topic][r.difficulty] !== undefined) byTopic[r.topic][r.difficulty] += 1;
+  }
+  return Object.values(byTopic).sort((a, b) => a.topic.localeCompare(b.topic));
+}
+
+export async function loadPracticeQuestions(exam, topic, difficulty) {
+  const { data, error } = await supabase
+    .from("practice_questions")
+    .select("*")
+    .eq("exam", exam)
+    .eq("topic", topic)
+    .eq("difficulty", difficulty);
+  if (error) throw error;
+  return (data || []).map((r) => ({
+    id: r.id,
+    text: r.text,
+    options: r.options,
+    answer: r.answer,
+    explanation: r.explanation,
+    topic: r.topic,
+    difficulty: r.difficulty,
+  }));
+}
+
+// Admin's full browsable list for one exam (all topics/difficulties at
+// once) — used by the Practice Bank management table, not the student picker.
+export async function loadAllPracticeQuestions(exam) {
+  const { data, error } = await supabase.from("practice_questions").select("*").eq("exam", exam).order("topic");
+  if (error) throw error;
+  return (data || []).map((r) => ({
+    id: r.id,
+    text: r.text,
+    options: r.options,
+    answer: r.answer,
+    explanation: r.explanation,
+    topic: r.topic,
+    difficulty: r.difficulty,
+  }));
+}
+
+// Always an upsert, never a fixed-size "replace" — unlike a mock section,
+// the practice bank has no capacity limit, so a question with an id already
+// present just updates in place and anything new is added alongside it.
+export async function savePracticeQuestions(exam, questions) {
+  const rows = questions.map((q) => ({
+    id: q.id,
+    exam,
+    topic: q.topic,
+    difficulty: q.difficulty,
+    text: q.text,
+    options: q.options,
+    answer: q.answer,
+    explanation: q.explanation,
+  }));
+  const { error } = await supabase.from("practice_questions").upsert(rows);
+  if (error) throw error;
+}
+
+export async function deletePracticeQuestion(id) {
+  const { error } = await supabase.from("practice_questions").delete().eq("id", id);
+  if (error) throw error;
+}

@@ -5,7 +5,7 @@ import {
   ArrowLeft, ArrowRight, Save, X, Lock, Play, Clock, Flag, Download, LogOut,
   TrendingUp, Target, Youtube, Trophy, Flame, Share2, BarChart2,
   Swords, ThumbsUp, ThumbsDown, Link2, Activity,
-  Landmark, GraduationCap, Award, Sparkles, FileText, Layers,
+  Landmark, GraduationCap, Award, Sparkles, FileText, Layers, BookOpen,
 } from "lucide-react";
 import {
   loadMocksIndex, saveMocksIndex, loadMockQuestions, saveMockQuestions, deleteMockQuestions,
@@ -13,6 +13,8 @@ import {
   loadCutoffs, addCutoff, deleteCutoff,
   createChallenge, loadChallenge, claimOpponentSlot, setChallengeReaction, loadAttemptById,
   loadAttemptsInRange,
+  loadPracticeTopicSummary, loadPracticeQuestions, loadAllPracticeQuestions,
+  savePracticeQuestions, deletePracticeQuestion,
 } from "./lib/storage";
 import { signIn, signOut, getSession, onAuthStateChange } from "./lib/auth";
 import { analyzeAttempt } from "./lib/aiAnalysis";
@@ -335,6 +337,16 @@ function mockTypeBadgeLabel(mock) {
   return "FULL MOCK";
 }
 const DIFFICULTIES = ["Easy", "Moderate", "Hard", "Very Hard", "Extremely Hard", "Crazy Hard"];
+// Practice Ground uses its own simple 3-level scale — deliberately separate
+// from DIFFICULTIES above (which is just informational metadata on a mock
+// question). Here difficulty is the primary way a student picks what to
+// practice, so it's kept to exactly three deliberate levels.
+const PRACTICE_DIFFICULTIES = ["Easy", "Medium", "Hard"];
+const PRACTICE_DIFFICULTY_COLORS = {
+  Easy: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  Medium: "bg-amber-100 text-amber-700 border-amber-200",
+  Hard: "bg-red-100 text-red-700 border-red-200",
+};
 const DIFFICULTY_COLORS = {
   Easy: "bg-emerald-100 text-emerald-700",
   Moderate: "bg-blue-100 text-blue-700",
@@ -504,6 +516,60 @@ function validateImportJSON(rawText, sectionKey, idsInThisSection, idsInOtherSec
       // Falls back to the section label when absent, so this is never
       // required and never blocks an import.
       topic: typeof q.topic === "string" && q.topic.trim() ? q.topic.trim() : null,
+    });
+  });
+
+  return { ok: errors.length === 0, errors, questions: errors.length === 0 ? cleaned : [] };
+}
+
+// Practice Ground questions have no fixed container to bound them (unlike a
+// mock section, there's no "required count") and every id is a plain
+// upsert — a matching id updates that question in place, a new id adds one.
+// The only strict requirements are the two fields mock questions don't need:
+// topic (it's the primary way students browse) and a valid difficulty.
+function validatePracticeImportJSON(rawText) {
+  let parsed;
+  try {
+    parsed = JSON.parse(rawText);
+  } catch (e) {
+    return { ok: false, errors: [{ index: null, message: `Invalid JSON — ${e.message}` }], questions: [] };
+  }
+  if (!Array.isArray(parsed)) {
+    return { ok: false, errors: [{ index: null, message: "Top-level JSON must be an array of questions." }], questions: [] };
+  }
+  if (parsed.length === 0) {
+    return { ok: false, errors: [{ index: null, message: "Array is empty — nothing to import." }], questions: [] };
+  }
+
+  const errors = [];
+  const seenInBatch = new Set();
+  const cleaned = [];
+
+  parsed.forEach((q, i) => {
+    const n = i + 1;
+    const fail = (msg) => errors.push({ index: n, message: msg });
+
+    if (!q || typeof q !== "object") return fail("Not a valid question object.");
+    if (!q.id || typeof q.id !== "string") return fail("Missing or invalid 'id'.");
+    if (seenInBatch.has(q.id)) return fail(`Duplicate id "${q.id}" within this upload.`);
+    if (!q.topic || typeof q.topic !== "string" || !q.topic.trim()) return fail("Missing 'topic' — this is how students will browse practice questions.");
+    if (!PRACTICE_DIFFICULTIES.includes(q.difficulty)) return fail(`Invalid 'difficulty' "${q.difficulty}" — must be one of ${PRACTICE_DIFFICULTIES.join(", ")}.`);
+    if (!q.text || typeof q.text !== "string" || !q.text.trim()) return fail("Missing question text.");
+    if (!Array.isArray(q.options) || q.options.length !== 4)
+      return fail(`Expected exactly 4 options, got ${Array.isArray(q.options) ? q.options.length : "none"}.`);
+    if (q.options.some((o) => typeof o !== "string" || !o.trim())) return fail("One or more options are empty.");
+    if (![0, 1, 2, 3].includes(q.answer)) return fail(`Invalid answer index "${q.answer}" — must be 0, 1, 2, or 3.`);
+    if (!q.explanation || typeof q.explanation !== "string" || !q.explanation.trim()) return fail("Missing explanation.");
+
+    seenInBatch.add(q.id);
+    cleaned.push({
+      id: q.id,
+      topic: q.topic.trim(),
+      difficulty: q.difficulty,
+      text: q.text.trim(),
+      options: q.options.map((o) => o.trim()),
+      answer: q.answer,
+      explanation: q.explanation.trim(),
     });
   });
 
@@ -3103,6 +3169,194 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
 }
 
 // ============================================================================
+// PRACTICE BANK (admin) — upload/manage the standalone Practice Ground
+// question bank, per exam/topic/difficulty. Deliberately simpler than
+// SectionManager: there's no fixed capacity to manage and no add-vs-replace
+// mode, since every upload is just an upsert (matching id updates in place,
+// new id adds alongside). Deleting a question is the only other write.
+// ============================================================================
+function PracticeBankView() {
+  const [examKey, setExamKey] = useState(EXAM_LIST[0].key);
+  const [jsonText, setJsonText] = useState("");
+  const [errors, setErrors] = useState([]);
+  const [successMsg, setSuccessMsg] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [questions, setQuestions] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [filterTopic, setFilterTopic] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [loadError, setLoadError] = useState(false);
+
+  const refresh = useCallback(async () => {
+    setLoaded(false);
+    setLoadError(false);
+    try {
+      setQuestions(await loadAllPracticeQuestions(examKey));
+    } catch {
+      setLoadError(true);
+    } finally {
+      setLoaded(true);
+    }
+  }, [examKey]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  function handleValidate() {
+    return validatePracticeImportJSON(jsonText);
+  }
+
+  async function handleImport() {
+    const result = handleValidate();
+    setErrors(result.errors);
+    setSuccessMsg("");
+    if (!result.ok) return;
+    setUploading(true);
+    try {
+      await savePracticeQuestions(examKey, result.questions);
+      setJsonText("");
+      setSuccessMsg(`Uploaded ${result.questions.length} question${result.questions.length === 1 ? "" : "s"}.`);
+      await refresh();
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function confirmDelete() {
+    await deletePracticeQuestion(deleteTarget.id);
+    setDeleteTarget(null);
+    refresh();
+  }
+
+  const filtered = questions.filter((q) => !filterTopic || q.topic.toLowerCase().includes(filterTopic.toLowerCase()));
+  const topicGroups = {};
+  filtered.forEach((q) => {
+    if (!topicGroups[q.topic]) topicGroups[q.topic] = [];
+    topicGroups[q.topic].push(q);
+  });
+
+  return (
+    <div className="max-w-4xl">
+      <div className="flex gap-1.5 mb-4">
+        {EXAM_LIST.map((exam) => (
+          <button
+            key={exam.key}
+            onClick={() => setExamKey(exam.key)}
+            className={`text-xs px-3 py-1.5 rounded-md border ${
+              examKey === exam.key ? "bg-blue-900 text-white border-blue-900" : "bg-white text-slate-500 border-slate-200"
+            }`}
+          >
+            {exam.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-lg p-4 mb-6">
+        <label className="flex items-center gap-1.5 text-xs font-medium text-slate-500 mb-1.5">
+          <Upload size={13} /> Paste JSON array to add/update Practice Ground questions for {EXAMS[examKey].label}
+        </label>
+        <div className="text-xs text-slate-400 mb-2">
+          A question with an id that already exists here updates in place — there's no fixed limit, add as many as
+          you like. Each question needs its own "topic" (how students will browse) and "difficulty" (exactly "Easy",
+          "Medium", or "Hard").
+        </div>
+        <textarea
+          value={jsonText}
+          onChange={(e) => setJsonText(e.target.value)}
+          rows={8}
+          placeholder={`[\n  {\n    "id": "trig_easy_001",\n    "topic": "Trigonometry",\n    "difficulty": "Easy",\n    "text": "...",\n    "options": ["...", "...", "...", "..."],\n    "answer": 0,\n    "explanation": "..."\n  }\n]`}
+          className="w-full text-xs font-mono border border-slate-200 rounded-md p-3 focus:outline-none focus:ring-2 focus:ring-blue-200"
+        />
+        <div className="flex items-center gap-2 mt-2">
+          <button onClick={() => setErrors(handleValidate().errors)} className="text-xs px-3 py-1.5 rounded-md border border-slate-200 text-slate-600">
+            Validate
+          </button>
+          <button onClick={handleImport} disabled={uploading} className="text-xs px-3 py-1.5 rounded-md bg-blue-900 text-white disabled:opacity-50">
+            {uploading ? "Uploading..." : "Validate & Upload"}
+          </button>
+          {successMsg && <span className="text-xs text-emerald-600 font-medium">{successMsg}</span>}
+        </div>
+        {errors.length > 0 && (
+          <div className="mt-3 bg-red-50 border border-red-200 rounded-md p-3 space-y-1">
+            {errors.map((e, i) => (
+              <div key={i} className="text-xs text-red-700">
+                {e.index ? <span className="font-semibold">Question {e.index}: </span> : null}
+                {e.message}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h3 className="text-sm font-semibold text-slate-700">
+          {questions.length} question{questions.length === 1 ? "" : "s"} in {EXAMS[examKey].label} Practice Ground
+        </h3>
+        <div className="relative w-56">
+          <Search size={13} className="absolute left-2.5 top-2.5 text-slate-400" />
+          <input
+            value={filterTopic}
+            onChange={(e) => setFilterTopic(e.target.value)}
+            placeholder="Filter by topic..."
+            className="w-full text-xs border border-slate-200 rounded-md pl-7 pr-2 py-1.5"
+          />
+        </div>
+      </div>
+
+      {!loaded ? (
+        <div className="text-sm text-slate-400">Loading...</div>
+      ) : loadError ? (
+        <div className="text-center bg-red-50 border border-dashed border-red-200 rounded-xl p-10 text-sm text-red-500">
+          Couldn't load the Practice Bank — if you haven't run the setup SQL for the practice_questions table yet,
+          that's why. Otherwise, try again in a moment.
+        </div>
+      ) : questions.length === 0 ? (
+        <div className="text-center bg-white border border-dashed border-slate-300 rounded-xl p-10 text-sm text-slate-400">
+          No practice questions uploaded for {EXAMS[examKey].label} yet.
+        </div>
+      ) : (
+        <div className="space-y-5">
+          {Object.entries(topicGroups).map(([topic, qs]) => (
+            <div key={topic} className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+              <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600">
+                {topic} · {qs.length} question{qs.length === 1 ? "" : "s"}
+              </div>
+              <div className="divide-y divide-slate-100">
+                {qs.map((q) => (
+                  <div key={q.id} className="flex items-center gap-3 px-4 py-2.5">
+                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border shrink-0 ${PRACTICE_DIFFICULTY_COLORS[q.difficulty]}`}>
+                      {q.difficulty}
+                    </span>
+                    <span className="flex-1 min-w-0 text-sm text-slate-700 truncate">
+                      <MathText text={q.text} />
+                    </span>
+                    <button onClick={() => setDeleteTarget(q)} className="text-slate-300 hover:text-red-500 shrink-0">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {deleteTarget && (
+        <ConfirmModal
+          title="Delete this practice question?"
+          body="This removes it permanently from the Practice Ground bank. This cannot be undone."
+          confirmLabel="Delete"
+          danger
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
 // APP SHELL
 // ============================================================================
 function AdminPanel() {
@@ -3368,6 +3622,7 @@ function AdminPanel() {
     { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, onClick: goDashboard },
     { key: "list", label: "Mock Tests", icon: ListChecks, onClick: goList },
     { key: "analytics", label: "Analytics", icon: Activity, onClick: () => setView("analytics") },
+    { key: "practiceBank", label: "Practice Bank", icon: BookOpen, onClick: () => setView("practiceBank") },
     { key: "cutoffs", label: "Cutoffs", icon: BarChart2, onClick: () => setView("cutoffs") },
     { key: "import", label: "Import Data", icon: Upload, onClick: () => setView("import") },
   ];
@@ -3419,6 +3674,7 @@ function AdminPanel() {
             {view === "dashboard" && "Dashboard"}
             {view === "list" && "Mock Tests"}
             {view === "analytics" && "Analytics"}
+            {view === "practiceBank" && "Practice Bank"}
             {view === "cutoffs" && "Cutoffs"}
             {view === "import" && "Import Data"}
             {view === "editor" && activeMock?.title}
@@ -3445,6 +3701,7 @@ function AdminPanel() {
             />
           )}
           {view === "analytics" && <AnalyticsView mocksIndex={mocksIndex} />}
+          {view === "practiceBank" && <PracticeBankView />}
           {view === "cutoffs" && <CutoffsView />}
           {view === "import" && <ImportDataView onImport={importData} />}
           {view === "editor" && activeMock && activeQuestions && (
@@ -4703,6 +4960,220 @@ function WeakTopicPracticeView({ topics, onExit }) {
   );
 }
 
+// ============================================================================
+// PRACTICE GROUND (student) — a standalone question bank picker + runner,
+// separate from mocks entirely (no timer, no fixed question count). Not to
+// be confused with WeakTopicPracticeView above, which reuses questions
+// already tagged on published mocks — this pulls from the practice_questions
+// table admin uploads independently via PracticeBankView.
+// ============================================================================
+function PracticeGroundPickerView({ exam, onStart, onBack }) {
+  const [topics, setTopics] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      setLoaded(false);
+      setLoadError(false);
+      try {
+        setTopics(await loadPracticeTopicSummary(exam.key));
+      } catch {
+        setLoadError(true);
+      } finally {
+        setLoaded(true);
+      }
+    })();
+  }, [exam.key]);
+
+  const theme = EXAM_THEME[exam.key];
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50">
+      <div className={`relative overflow-hidden bg-gradient-to-br ${theme.gradient} text-white px-6 py-10 sm:py-14`}>
+        <div className="absolute -right-16 -top-16 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative max-w-5xl mx-auto">
+          <button onClick={onBack} className="text-sm text-white/80 hover:text-white mb-4 inline-flex items-center gap-1 transition-colors">
+            ← Back
+          </button>
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur flex items-center justify-center shrink-0">
+              <BookOpen size={22} />
+            </div>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold">{exam.label} Practice Ground</h1>
+              <p className="text-sm text-white/70">Pick a topic and a difficulty — no timer, go at your own pace.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <main className="max-w-5xl mx-auto px-6 -mt-6 pb-16 relative">
+        {!loaded ? (
+          <div className="mt-8 text-sm text-slate-400">Loading topics...</div>
+        ) : loadError ? (
+          <div className="mt-8 text-center bg-red-50 border border-dashed border-red-200 rounded-xl p-10 text-sm text-red-500">
+            Couldn't load Practice Ground right now — please try again in a moment.
+          </div>
+        ) : topics.length === 0 ? (
+          <div className="mt-8 text-center bg-white border border-dashed border-slate-300 rounded-xl p-10 text-sm text-slate-400">
+            No practice questions have been added for {exam.label} yet — check back soon.
+          </div>
+        ) : (
+          <div className="mt-8 space-y-3">
+            {topics.map((t) => (
+              <div key={t.topic} className="bg-white border border-slate-200 rounded-2xl p-5">
+                <h3 className="text-sm font-semibold text-slate-800 mb-3">{t.topic}</h3>
+                <div className="flex flex-wrap gap-2">
+                  {PRACTICE_DIFFICULTIES.map((d) => {
+                    const count = t[d] || 0;
+                    return (
+                      <button
+                        key={d}
+                        onClick={() => count > 0 && onStart(t.topic, d)}
+                        disabled={count === 0}
+                        className={`text-xs font-medium px-3.5 py-2 rounded-full border transition-colors disabled:opacity-40 disabled:cursor-default ${PRACTICE_DIFFICULTY_COLORS[d]}`}
+                      >
+                        {d} · {count}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+
+function PracticeGroundRunView({ examKey, topic, difficulty, onExit }) {
+  const [loading, setLoading] = useState(true);
+  const [list, setList] = useState([]);
+  const [idx, setIdx] = useState(0);
+  const [selected, setSelected] = useState(null);
+  const [correctCount, setCorrectCount] = useState(0);
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        setList(await loadPracticeQuestions(examKey, topic, difficulty));
+      } catch {
+        setList([]);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [examKey, topic, difficulty]);
+
+  function choose(i) {
+    if (selected !== null) return;
+    setSelected(i);
+    if (i === list[idx].answer) setCorrectCount((c) => c + 1);
+  }
+  function next() {
+    if (idx < list.length - 1) {
+      setIdx((x) => x + 1);
+      setSelected(null);
+    } else {
+      setDone(true);
+    }
+  }
+
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center text-sm text-slate-400">Loading practice questions...</div>;
+  }
+  if (list.length === 0) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <div className="text-center bg-white border border-dashed border-slate-300 rounded-xl p-10 text-sm text-slate-400">
+          No questions found for {topic} ({difficulty}) — check back once more are added.
+          <div className="mt-4">
+            <button onClick={onExit} className="text-sm px-4 py-2 rounded-md border border-slate-200 text-slate-600">
+              Back
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  if (done) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex flex-col items-center py-10 px-4">
+        <div className="max-w-md w-full text-center bg-white border border-slate-200 rounded-2xl shadow-sm p-10">
+          <Target className="mx-auto mb-4 text-blue-700" size={40} />
+          <h2 className="text-xl font-semibold text-slate-800 mb-1">Practice complete</h2>
+          <p className="text-sm text-slate-500 mb-6">
+            {correctCount} / {list.length} correct · {topic} ({difficulty})
+          </p>
+          <button onClick={onExit} className="text-sm px-5 py-2.5 rounded-lg bg-slate-900 text-white">
+            Back to Practice Ground
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const q = list[idx];
+  return (
+    <div className="min-h-screen bg-slate-100 flex flex-col items-center py-10 px-4">
+      <div className="max-w-2xl w-full">
+        <div className="flex items-center justify-between mb-3">
+          <button onClick={onExit} className="text-sm text-slate-500">← Exit practice</button>
+          <span className="text-xs text-slate-400 flex items-center gap-1.5">
+            Question {idx + 1} of {list.length} · {topic}
+            <span className={`px-1.5 py-0.5 rounded border ${PRACTICE_DIFFICULTY_COLORS[difficulty]}`}>{difficulty}</span>
+          </span>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-8">
+          <p className="text-lg leading-relaxed text-slate-900 mb-6 font-medium">
+            <MathText text={q.text} />
+          </p>
+          <div className="space-y-3">
+            {q.options.map((opt, i) => {
+              const isRight = i === q.answer;
+              const isPicked = i === selected;
+              let cls = "border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50";
+              if (selected !== null) {
+                if (isRight) cls = "border-emerald-400 bg-emerald-50 text-emerald-800";
+                else if (isPicked) cls = "border-red-300 bg-red-50 text-red-700";
+              }
+              return (
+                <button
+                  key={i}
+                  onClick={() => choose(i)}
+                  disabled={selected !== null}
+                  className={`w-full flex items-center gap-3 text-left px-5 py-3.5 rounded-xl border-2 text-base transition-colors ${cls}`}
+                >
+                  <span className="w-7 h-7 shrink-0 rounded-full flex items-center justify-center text-sm font-semibold bg-slate-100 text-slate-500">
+                    {LETTERS[i]}
+                  </span>
+                  <MathText text={opt} />
+                </button>
+              );
+            })}
+          </div>
+          {selected !== null && q.explanation && (
+            <p className="text-xs text-slate-500 mt-4 italic">
+              <MathText text={q.explanation} />
+            </p>
+          )}
+        </div>
+        {selected !== null && (
+          <div className="flex justify-end mt-4">
+            <button onClick={next} className="text-sm px-5 py-2.5 rounded-lg bg-blue-900 text-white font-medium">
+              {idx < list.length - 1 ? "Next question" : "Finish practice"}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function StudentApp() {
   const [mocksIndex, setMocksIndex] = useState([]);
   const [loaded, setLoaded] = useState(false);
@@ -4714,6 +5185,7 @@ function StudentApp() {
   const [selectedQuestions, setSelectedQuestions] = useState(null);
   const [attempts, setAttempts] = useState([]);
   const [practiceTopics, setPracticeTopics] = useState(null);
+  const [practiceGroundSelection, setPracticeGroundSelection] = useState(null); // { topic, difficulty }
 
   // Same storage source as AdminPanel — no separate student store. Reloading
   // on every visit to a list screen (not just once on mount) means an admin
@@ -4761,6 +5233,18 @@ function StudentApp() {
   function chooseExam(examKey) {
     setExamFilter(examKey);
     setView("type");
+  }
+
+  function openPracticeGround() {
+    setView("practiceGroundPick");
+  }
+  function startPracticeGround(topic, difficulty) {
+    setPracticeGroundSelection({ topic, difficulty });
+    setView("practiceGroundRun");
+  }
+  function exitPracticeGroundRun() {
+    setPracticeGroundSelection(null);
+    setView("practiceGroundPick");
   }
 
   function chooseType(type) {
@@ -4857,6 +5341,27 @@ function StudentApp() {
 
   if (view === "practice" && practiceTopics) {
     return <WeakTopicPracticeView topics={practiceTopics} onExit={() => setView("progress")} />;
+  }
+
+  if (view === "practiceGroundPick" && examFilter) {
+    return (
+      <PracticeGroundPickerView
+        exam={EXAMS[examFilter] || EXAMS[DEFAULT_EXAM]}
+        onStart={startPracticeGround}
+        onBack={() => setView("type")}
+      />
+    );
+  }
+
+  if (view === "practiceGroundRun" && practiceGroundSelection) {
+    return (
+      <PracticeGroundRunView
+        examKey={examFilter}
+        topic={practiceGroundSelection.topic}
+        difficulty={practiceGroundSelection.difficulty}
+        onExit={exitPracticeGroundRun}
+      />
+    );
   }
 
   if (view === "instructions" && selectedMock && selectedQuestions) {
@@ -4970,9 +5475,31 @@ function StudentApp() {
 
         <main className="max-w-5xl mx-auto px-6 -mt-6 pb-16 relative">
           <p className="text-sm text-slate-500 mb-5 mt-8">What would you like to practice?</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-5">
             <TypeSelectCard type={MOCK_TYPES.FULL} count={fullCount} onSelect={chooseType} exam={exam} />
             <TypeSelectCard type={MOCK_TYPES.SECTIONAL} count={sectionalCount} onSelect={chooseType} exam={exam} />
+            <button
+              onClick={openPracticeGround}
+              className={`group relative bg-white border border-slate-200 rounded-3xl p-7 text-left shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden ${theme.ring}`}
+            >
+              <div className={`absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r ${theme.gradient}`} />
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 ${theme.iconBg}`}>
+                <BookOpen size={22} />
+              </div>
+              <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold mb-2 ${theme.badgeBg}`}>PRACTICE</span>
+              <h2 className="text-lg font-bold text-slate-800 mb-1.5">Practice Ground</h2>
+              <p className="text-sm text-slate-500 mb-5 leading-relaxed">
+                Pick one topic — like Trigonometry — and drill it at Easy, Medium, or Hard. No timer, no pressure.
+              </p>
+              <div className="flex items-center justify-between">
+                <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${theme.badgeBg}`}>Untimed</span>
+                <span
+                  className={`inline-flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br ${theme.gradient} text-white group-hover:scale-110 transition-transform`}
+                >
+                  <ArrowRight size={15} />
+                </span>
+              </div>
+            </button>
           </div>
 
           <button
