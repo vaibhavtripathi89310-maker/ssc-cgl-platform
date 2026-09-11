@@ -348,6 +348,22 @@ const PRACTICE_DIFFICULTY_COLORS = {
   Medium: "bg-amber-100 text-amber-700 border-amber-200",
   Hard: "bg-red-100 text-red-700 border-red-200",
 };
+// Curated topic lists for Practice Ground, keyed by exam — picked from a
+// fixed list instead of free-typed, so a topic name can never accidentally
+// drift/mismatch across separate uploads (and later, so an AI-analysis
+// "practice this topic" link has something reliable to match against).
+// Only SSC CGL Quant is filled in so far (per real syllabus research, see
+// project memory) — other exams/sections fall back to free-text entry in
+// the UI until their own curated lists get built.
+const CURATED_PRACTICE_TOPICS = {
+  ssc_cgl: [
+    "Number System", "HCF and LCM", "Simplification and Approximation", "Percentage",
+    "Ratio and Proportion", "Average", "Profit, Loss and Discount", "Simple and Compound Interest",
+    "Time and Work", "Time, Speed and Distance", "Mixture and Alligation", "Partnership",
+    "Algebra", "Geometry", "Coordinate Geometry", "Mensuration", "Trigonometry",
+    "Height and Distance", "Data Interpretation", "Statistics",
+  ],
+};
 const DIFFICULTY_COLORS = {
   Easy: "bg-emerald-100 text-emerald-700",
   Moderate: "bg-blue-100 text-blue-700",
@@ -528,7 +544,15 @@ function validateImportJSON(rawText, sectionKey, idsInThisSection, idsInOtherSec
 // upsert — a matching id updates that question in place, a new id adds one.
 // The only strict requirements are the two fields mock questions don't need:
 // topic (it's the primary way students browse) and a valid difficulty.
-function validatePracticeImportJSON(rawText) {
+// `topic` is chosen once via the dropdown/input above the textarea and
+// applied to every question in the batch — not repeated per question in the
+// JSON anymore, since a whole paste is always "N questions for this one
+// topic I just picked." Any stray "topic" field inside an individual
+// question object is simply ignored in favor of the selected one.
+function validatePracticeImportJSON(rawText, topic) {
+  if (!topic || !topic.trim()) {
+    return { ok: false, errors: [{ index: null, message: "Pick a topic above first — every question in this batch will be tagged with it." }], questions: [] };
+  }
   let parsed;
   try {
     parsed = JSON.parse(rawText);
@@ -553,7 +577,6 @@ function validatePracticeImportJSON(rawText) {
     if (!q || typeof q !== "object") return fail("Not a valid question object.");
     if (!q.id || typeof q.id !== "string") return fail("Missing or invalid 'id'.");
     if (seenInBatch.has(q.id)) return fail(`Duplicate id "${q.id}" within this upload.`);
-    if (!q.topic || typeof q.topic !== "string" || !q.topic.trim()) return fail("Missing 'topic' — this is how students will browse practice questions.");
     if (!PRACTICE_DIFFICULTIES.includes(q.difficulty)) return fail(`Invalid 'difficulty' "${q.difficulty}" — must be one of ${PRACTICE_DIFFICULTIES.join(", ")}.`);
     if (!q.text || typeof q.text !== "string" || !q.text.trim()) return fail("Missing question text.");
     if (!Array.isArray(q.options) || q.options.length !== 4)
@@ -565,7 +588,7 @@ function validatePracticeImportJSON(rawText) {
     seenInBatch.add(q.id);
     cleaned.push({
       id: q.id,
-      topic: q.topic.trim(),
+      topic: topic.trim(),
       difficulty: q.difficulty,
       text: q.text.trim(),
       options: q.options.map((o) => o.trim()),
@@ -3175,22 +3198,43 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
 // it's the only thing a student browses Practice Ground by, and it's also
 // what a future "practice this topic" link from the AI analysis will match
 // against, so it has to be filled in deliberately, not left blank.
-function PracticeQuestionForm({ initial, onSave, onCancel }) {
+function PracticeQuestionForm({ initial, topicOptions, defaultTopic, onSave, onCancel }) {
   const [q, setQ] = useState(
-    initial || { id: generateId("pq"), topic: "", difficulty: "Easy", text: "", options: ["", "", "", ""], answer: 0, explanation: "" }
+    initial || { id: generateId("pq"), topic: defaultTopic || "", difficulty: "Easy", text: "", options: ["", "", "", ""], answer: 0, explanation: "" }
   );
   const canSave = q.topic.trim() && q.text.trim() && q.options.every((o) => o.trim()) && q.explanation.trim();
+  // If editing a question whose topic isn't in the curated list (e.g. it
+  // was free-typed before a curated list existed for this exam), keep it
+  // selectable so saving the form never silently changes/loses it.
+  const options = topicOptions && topicOptions.length > 0
+    ? topicOptions.includes(q.topic) || !q.topic
+      ? topicOptions
+      : [q.topic, ...topicOptions]
+    : null;
   return (
     <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-2.5">
       <div className="flex items-center gap-2">
         <div className="flex-1">
           <label className="block text-[11px] font-medium text-slate-500 mb-1">Topic (required)</label>
-          <input
-            value={q.topic}
-            onChange={(e) => setQ({ ...q, topic: e.target.value })}
-            placeholder="e.g. Height and Distance"
-            className="w-full text-sm border border-slate-200 rounded-md px-3 py-1.5"
-          />
+          {options ? (
+            <select
+              value={q.topic}
+              onChange={(e) => setQ({ ...q, topic: e.target.value })}
+              className="w-full text-sm border border-slate-200 rounded-md px-3 py-1.5"
+            >
+              <option value="" disabled>Select a topic...</option>
+              {options.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          ) : (
+            <input
+              value={q.topic}
+              onChange={(e) => setQ({ ...q, topic: e.target.value })}
+              placeholder="e.g. Height and Distance"
+              className="w-full text-sm border border-slate-200 rounded-md px-3 py-1.5"
+            />
+          )}
         </div>
         <div>
           <label className="block text-[11px] font-medium text-slate-500 mb-1">Difficulty</label>
@@ -3274,6 +3318,15 @@ function PracticeBankView() {
   const [togglingEnabled, setTogglingEnabled] = useState(false);
   const [addingNew, setAddingNew] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState(null);
+  const [selectedTopic, setSelectedTopic] = useState(CURATED_PRACTICE_TOPICS[EXAM_LIST[0].key]?.[0] || "");
+
+  const topicOptions = CURATED_PRACTICE_TOPICS[examKey] || null;
+
+  // Switching exams resets the topic choice — a curated topic from one
+  // exam's list has no guaranteed meaning for another exam.
+  useEffect(() => {
+    setSelectedTopic(topicOptions?.[0] || "");
+  }, [examKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const refresh = useCallback(async () => {
     setLoaded(false);
@@ -3316,7 +3369,7 @@ function PracticeBankView() {
   }
 
   function handleValidate() {
-    return validatePracticeImportJSON(jsonText);
+    return validatePracticeImportJSON(jsonText, selectedTopic);
   }
 
   async function handleImport() {
@@ -3397,18 +3450,48 @@ function PracticeBankView() {
 
       <div className="bg-white border border-slate-200 rounded-lg p-4 mb-6">
         <label className="flex items-center gap-1.5 text-xs font-medium text-slate-500 mb-1.5">
-          <Upload size={13} /> Paste JSON array to add/update Practice Ground questions for {EXAMS[examKey].label}
+          <Upload size={13} /> Add Practice Ground questions for {EXAMS[examKey].label}
         </label>
+
+        <div className="mb-3">
+          <label className="block text-[11px] font-medium text-slate-500 mb-1">
+            Topic — every question pasted below gets tagged with this one
+          </label>
+          {topicOptions ? (
+            <select
+              value={selectedTopic}
+              onChange={(e) => setSelectedTopic(e.target.value)}
+              className="w-full sm:w-80 text-sm border border-slate-200 rounded-md px-3 py-1.5"
+            >
+              {topicOptions.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          ) : (
+            <>
+              <input
+                value={selectedTopic}
+                onChange={(e) => setSelectedTopic(e.target.value)}
+                placeholder="e.g. Verbal Reasoning"
+                className="w-full sm:w-80 text-sm border border-slate-200 rounded-md px-3 py-1.5"
+              />
+              <div className="text-[11px] text-slate-400 mt-1">
+                No curated topic list built yet for {EXAMS[examKey].label} — type one directly for now.
+              </div>
+            </>
+          )}
+        </div>
+
         <div className="text-xs text-slate-400 mb-2">
           A question with an id that already exists here updates in place — there's no fixed limit, add as many as
-          you like. Each question needs its own "topic" (how students will browse) and "difficulty" (exactly "Easy",
-          "Medium", or "Hard").
+          you like. Each question still needs its own "difficulty" (exactly "Easy", "Medium", or "Hard") — no need
+          to repeat "topic" per question anymore, it's taken from your selection above.
         </div>
         <textarea
           value={jsonText}
           onChange={(e) => setJsonText(e.target.value)}
           rows={8}
-          placeholder={`[\n  {\n    "id": "trig_easy_001",\n    "topic": "Trigonometry",\n    "difficulty": "Easy",\n    "text": "...",\n    "options": ["...", "...", "...", "..."],\n    "answer": 0,\n    "explanation": "..."\n  }\n]`}
+          placeholder={`[\n  {\n    "id": "trig_easy_001",\n    "difficulty": "Easy",\n    "text": "...",\n    "options": ["...", "...", "...", "..."],\n    "answer": 0,\n    "explanation": "..."\n  }\n]`}
           className="w-full text-xs font-mono border border-slate-200 rounded-md p-3 focus:outline-none focus:ring-2 focus:ring-blue-200"
         />
         <div className="flex items-center gap-2 mt-2">
@@ -3462,6 +3545,8 @@ function PracticeBankView() {
         <div className="mb-5">
           <PracticeQuestionForm
             initial={editingQuestion}
+            topicOptions={topicOptions}
+            defaultTopic={selectedTopic}
             onSave={saveManualQuestion}
             onCancel={() => {
               setAddingNew(false);
