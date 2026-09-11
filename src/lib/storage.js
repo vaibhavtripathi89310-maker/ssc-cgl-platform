@@ -361,9 +361,15 @@ export async function setChallengeReaction(challengeId, role, reaction) {
 // Minimal columns only — this powers the topic/difficulty picker screen,
 // which just needs counts, not full question bodies. Aggregated client-side
 // for the same reason loadAttemptsInRange does: the row count here is never
-// going to be large enough to matter.
-export async function loadPracticeTopicSummary(exam) {
-  const { data, error } = await supabase.from("practice_questions").select("topic, difficulty").eq("exam", exam);
+// going to be large enough to matter. Scoped to one section at a time (the
+// student picks a section — Quant/Reasoning/English/GA — before ever
+// seeing a topic), same as the admin upload flow.
+export async function loadPracticeTopicSummary(exam, section) {
+  const { data, error } = await supabase
+    .from("practice_questions")
+    .select("topic, difficulty")
+    .eq("exam", exam)
+    .eq("section", section);
   if (error) throw error;
   const byTopic = {};
   for (const r of data || []) {
@@ -373,11 +379,12 @@ export async function loadPracticeTopicSummary(exam) {
   return Object.values(byTopic).sort((a, b) => a.topic.localeCompare(b.topic));
 }
 
-export async function loadPracticeQuestions(exam, topic, difficulty) {
+export async function loadPracticeQuestions(exam, section, topic, difficulty) {
   const { data, error } = await supabase
     .from("practice_questions")
     .select("*")
     .eq("exam", exam)
+    .eq("section", section)
     .eq("topic", topic)
     .eq("difficulty", difficulty);
   if (error) throw error;
@@ -392,10 +399,15 @@ export async function loadPracticeQuestions(exam, topic, difficulty) {
   }));
 }
 
-// Admin's full browsable list for one exam (all topics/difficulties at
-// once) — used by the Practice Bank management table, not the student picker.
-export async function loadAllPracticeQuestions(exam) {
-  const { data, error } = await supabase.from("practice_questions").select("*").eq("exam", exam).order("topic");
+// Admin's full browsable list for one exam+section (all topics/difficulties
+// within it) — used by the Practice Bank management table, not the student picker.
+export async function loadAllPracticeQuestions(exam, section) {
+  const { data, error } = await supabase
+    .from("practice_questions")
+    .select("*")
+    .eq("exam", exam)
+    .eq("section", section)
+    .order("topic");
   if (error) throw error;
   return (data || []).map((r) => ({
     id: r.id,
@@ -411,10 +423,11 @@ export async function loadAllPracticeQuestions(exam) {
 // Always an upsert, never a fixed-size "replace" — unlike a mock section,
 // the practice bank has no capacity limit, so a question with an id already
 // present just updates in place and anything new is added alongside it.
-export async function savePracticeQuestions(exam, questions) {
+export async function savePracticeQuestions(exam, section, questions) {
   const rows = questions.map((q) => ({
     id: q.id,
     exam,
+    section,
     topic: q.topic,
     difficulty: q.difficulty,
     text: q.text,

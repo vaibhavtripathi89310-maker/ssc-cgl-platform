@@ -348,21 +348,33 @@ const PRACTICE_DIFFICULTY_COLORS = {
   Medium: "bg-amber-100 text-amber-700 border-amber-200",
   Hard: "bg-red-100 text-red-700 border-red-200",
 };
-// Curated topic lists for Practice Ground, keyed by exam — picked from a
-// fixed list instead of free-typed, so a topic name can never accidentally
-// drift/mismatch across separate uploads (and later, so an AI-analysis
-// "practice this topic" link has something reliable to match against).
-// Only SSC CGL Quant is filled in so far (per real syllabus research, see
-// project memory) — other exams/sections fall back to free-text entry in
-// the UI until their own curated lists get built.
+// Curated topic lists for Practice Ground, keyed by exam then section key
+// (same section keys EXAMS already uses) — picked from a fixed list instead
+// of free-typed, so a topic name can never accidentally drift/mismatch
+// across separate uploads (and later, so an AI-analysis "practice this
+// topic" link has something reliable to match against). Only SSC CGL
+// Quant and General Awareness are filled in so far (per real syllabus
+// research, see project memory) — Reasoning and English fall back to
+// free-text entry in the UI until their own curated lists get built.
 const CURATED_PRACTICE_TOPICS = {
-  ssc_cgl: [
-    "Number System", "HCF and LCM", "Simplification and Approximation", "Percentage",
-    "Ratio and Proportion", "Average", "Profit, Loss and Discount", "Simple and Compound Interest",
-    "Time and Work", "Time, Speed and Distance", "Mixture and Alligation", "Partnership",
-    "Algebra", "Geometry", "Coordinate Geometry", "Mensuration", "Trigonometry",
-    "Height and Distance", "Data Interpretation", "Statistics",
-  ],
+  ssc_cgl: {
+    quant_aptitude: [
+      "Number System", "HCF and LCM", "Simplification and Approximation", "Percentage",
+      "Ratio and Proportion", "Average", "Profit, Loss and Discount", "Simple and Compound Interest",
+      "Time and Work", "Time, Speed and Distance", "Mixture and Alligation", "Partnership",
+      "Algebra", "Geometry", "Coordinate Geometry", "Mensuration", "Trigonometry",
+      "Height and Distance", "Data Interpretation", "Statistics",
+    ],
+    general_awareness: [
+      "Ancient Indian History", "Medieval Indian History", "Modern Indian History and Freedom Struggle",
+      "Indian Polity and Constitution", "Indian Geography", "World Geography", "Indian Economy",
+      "Physics", "Chemistry", "Biology", "Static GK (Books, Authors, Awards)", "Art and Culture",
+      "Sports", "Important Days and Events", "International Organizations", "Government Schemes",
+      "Current Affairs",
+    ],
+    gi_reasoning: [],
+    english_comprehension: [],
+  },
 };
 const DIFFICULTY_COLORS = {
   Easy: "bg-emerald-100 text-emerald-700",
@@ -3318,27 +3330,37 @@ function PracticeBankView() {
   const [togglingEnabled, setTogglingEnabled] = useState(false);
   const [addingNew, setAddingNew] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState(null);
-  const [selectedTopic, setSelectedTopic] = useState(CURATED_PRACTICE_TOPICS[EXAM_LIST[0].key]?.[0] || "");
+  const [sectionKey, setSectionKey] = useState(EXAMS[EXAM_LIST[0].key].sections[0].key);
+  const [selectedTopic, setSelectedTopic] = useState("");
 
-  const topicOptions = CURATED_PRACTICE_TOPICS[examKey] || null;
+  const examSections = EXAMS[examKey].sections;
+  const topicOptions = CURATED_PRACTICE_TOPICS[examKey]?.[sectionKey]?.length > 0
+    ? CURATED_PRACTICE_TOPICS[examKey][sectionKey]
+    : null;
 
-  // Switching exams resets the topic choice — a curated topic from one
-  // exam's list has no guaranteed meaning for another exam.
+  // Switching exams resets the section (and by extension the topic, via the
+  // effect below) — a section key from one exam has no guaranteed meaning
+  // for another, and a curated topic from one section certainly doesn't
+  // belong to a different one.
+  useEffect(() => {
+    setSectionKey(EXAMS[examKey].sections[0].key);
+  }, [examKey]);
+
   useEffect(() => {
     setSelectedTopic(topicOptions?.[0] || "");
-  }, [examKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sectionKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const refresh = useCallback(async () => {
     setLoaded(false);
     setLoadError(false);
     try {
-      setQuestions(await loadAllPracticeQuestions(examKey));
+      setQuestions(await loadAllPracticeQuestions(examKey, sectionKey));
     } catch {
       setLoadError(true);
     } finally {
       setLoaded(true);
     }
-  }, [examKey]);
+  }, [examKey, sectionKey]);
 
   useEffect(() => {
     refresh();
@@ -3379,7 +3401,7 @@ function PracticeBankView() {
     if (!result.ok) return;
     setUploading(true);
     try {
-      await savePracticeQuestions(examKey, result.questions);
+      await savePracticeQuestions(examKey, sectionKey, result.questions);
       setJsonText("");
       setSuccessMsg(`Uploaded ${result.questions.length} question${result.questions.length === 1 ? "" : "s"}.`);
       await refresh();
@@ -3395,7 +3417,7 @@ function PracticeBankView() {
   }
 
   async function saveManualQuestion(question) {
-    await savePracticeQuestions(examKey, [question]);
+    await savePracticeQuestions(examKey, sectionKey, [question]);
     setAddingNew(false);
     setEditingQuestion(null);
     await refresh();
@@ -3434,7 +3456,7 @@ function PracticeBankView() {
         </button>
       </div>
 
-      <div className="flex gap-1.5 mb-4">
+      <div className="flex gap-1.5 mb-3">
         {EXAM_LIST.map((exam) => (
           <button
             key={exam.key}
@@ -3448,9 +3470,23 @@ function PracticeBankView() {
         ))}
       </div>
 
+      <div className="flex gap-1.5 mb-4">
+        {examSections.map((s) => (
+          <button
+            key={s.key}
+            onClick={() => setSectionKey(s.key)}
+            className={`text-xs px-3 py-1.5 rounded-md border ${
+              sectionKey === s.key ? "bg-purple-600 text-white border-purple-600" : "bg-white text-slate-500 border-slate-200"
+            }`}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+
       <div className="bg-white border border-slate-200 rounded-lg p-4 mb-6">
         <label className="flex items-center gap-1.5 text-xs font-medium text-slate-500 mb-1.5">
-          <Upload size={13} /> Add Practice Ground questions for {EXAMS[examKey].label}
+          <Upload size={13} /> Add Practice Ground questions for {EXAMS[examKey].label} — {examSections.find((s) => s.key === sectionKey)?.label}
         </label>
 
         <div className="mb-3">
@@ -3517,7 +3553,7 @@ function PracticeBankView() {
 
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <h3 className="text-sm font-semibold text-slate-700">
-          {questions.length} question{questions.length === 1 ? "" : "s"} in {EXAMS[examKey].label} Practice Ground
+          {questions.length} question{questions.length === 1 ? "" : "s"} in {EXAMS[examKey].label} — {examSections.find((s) => s.key === sectionKey)?.label}
         </h3>
         <div className="flex items-center gap-2">
           <div className="relative w-56">
@@ -3565,7 +3601,7 @@ function PracticeBankView() {
         </div>
       ) : questions.length === 0 ? (
         <div className="text-center bg-white border border-dashed border-slate-300 rounded-xl p-10 text-sm text-slate-400">
-          No practice questions uploaded for {EXAMS[examKey].label} yet.
+          No practice questions uploaded for {EXAMS[examKey].label} — {examSections.find((s) => s.key === sectionKey)?.label} yet.
         </div>
       ) : (
         <div className="space-y-5">
@@ -5232,7 +5268,60 @@ function WeakTopicPracticeView({ topics, onExit }) {
 // already tagged on published mocks — this pulls from the practice_questions
 // table admin uploads independently via PracticeBankView.
 // ============================================================================
-function PracticeGroundPickerView({ exam, onStart, onBack }) {
+// First step of Practice Ground: pick which of the exam's four sections to
+// drill (Quant, Reasoning, English, GA/GS for SSC CGL) — every exam's own
+// section list (EXAMS[exam.key].sections), so this scales to GMAT/SNAP's
+// own sections automatically without any extra wiring. Always shows all
+// four regardless of whether questions exist yet for a given one — the
+// next screen handles the "nothing here yet" case, same as Full/Sectional
+// Mock cards do when a mock type has zero published tests.
+function PracticeGroundSectionPickerView({ exam, onPick, onBack }) {
+  const theme = EXAM_THEME[exam.key];
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50">
+      <div className={`relative overflow-hidden bg-gradient-to-br ${theme.gradient} text-white px-6 py-10 sm:py-14`}>
+        <div className="absolute -right-16 -top-16 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative max-w-5xl mx-auto">
+          <button onClick={onBack} className="text-sm text-white/80 hover:text-white mb-4 inline-flex items-center gap-1 transition-colors">
+            ← Back
+          </button>
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur flex items-center justify-center shrink-0">
+              <BookOpen size={22} />
+            </div>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold">{exam.label} Practice Ground</h1>
+              <p className="text-sm text-white/70">Which section do you want to drill?</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <main className="max-w-5xl mx-auto px-6 -mt-6 pb-16 relative">
+        <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {exam.sections.map((s) => (
+            <button
+              key={s.key}
+              onClick={() => onPick(s)}
+              className={`group bg-white border border-slate-200 rounded-2xl p-6 text-left shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 ${theme.ring}`}
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-bold text-slate-800">{s.label}</h3>
+                <span
+                  className={`inline-flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br ${theme.gradient} text-white group-hover:scale-110 transition-transform`}
+                >
+                  <ArrowRight size={15} />
+                </span>
+              </div>
+            </button>
+          ))}
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function PracticeGroundPickerView({ exam, section, onStart, onBack }) {
   const [topics, setTopics] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
@@ -5242,14 +5331,14 @@ function PracticeGroundPickerView({ exam, onStart, onBack }) {
       setLoaded(false);
       setLoadError(false);
       try {
-        setTopics(await loadPracticeTopicSummary(exam.key));
+        setTopics(await loadPracticeTopicSummary(exam.key, section.key));
       } catch {
         setLoadError(true);
       } finally {
         setLoaded(true);
       }
     })();
-  }, [exam.key]);
+  }, [exam.key, section.key]);
 
   const theme = EXAM_THEME[exam.key];
 
@@ -5266,7 +5355,7 @@ function PracticeGroundPickerView({ exam, onStart, onBack }) {
               <BookOpen size={22} />
             </div>
             <div>
-              <h1 className="text-xl sm:text-2xl font-bold">{exam.label} Practice Ground</h1>
+              <h1 className="text-xl sm:text-2xl font-bold">{section.label}</h1>
               <p className="text-sm text-white/70">Pick a topic and a difficulty — no timer, go at your own pace.</p>
             </div>
           </div>
@@ -5282,7 +5371,7 @@ function PracticeGroundPickerView({ exam, onStart, onBack }) {
           </div>
         ) : topics.length === 0 ? (
           <div className="mt-8 text-center bg-white border border-dashed border-slate-300 rounded-xl p-10 text-sm text-slate-400">
-            No practice questions have been added for {exam.label} yet — check back soon.
+            No practice questions have been added for {section.label} yet — check back soon.
           </div>
         ) : (
           <div className="mt-8 space-y-3">
@@ -5313,7 +5402,7 @@ function PracticeGroundPickerView({ exam, onStart, onBack }) {
   );
 }
 
-function PracticeGroundRunView({ examKey, topic, difficulty, onExit }) {
+function PracticeGroundRunView({ examKey, sectionKey, topic, difficulty, onExit }) {
   const [loading, setLoading] = useState(true);
   const [list, setList] = useState([]);
   const [idx, setIdx] = useState(0);
@@ -5325,14 +5414,14 @@ function PracticeGroundRunView({ examKey, topic, difficulty, onExit }) {
     (async () => {
       setLoading(true);
       try {
-        setList(await loadPracticeQuestions(examKey, topic, difficulty));
+        setList(await loadPracticeQuestions(examKey, sectionKey, topic, difficulty));
       } catch {
         setList([]);
       } finally {
         setLoading(false);
       }
     })();
-  }, [examKey, topic, difficulty]);
+  }, [examKey, sectionKey, topic, difficulty]);
 
   function choose(i) {
     if (selected !== null) return;
@@ -5450,6 +5539,7 @@ function StudentApp() {
   const [selectedQuestions, setSelectedQuestions] = useState(null);
   const [attempts, setAttempts] = useState([]);
   const [practiceTopics, setPracticeTopics] = useState(null);
+  const [practiceGroundSection, setPracticeGroundSection] = useState(null); // one of exam.sections, chosen first
   const [practiceGroundSelection, setPracticeGroundSelection] = useState(null); // { topic, difficulty }
   // Global admin-controlled switch (see PracticeBankView) — hidden by
   // default (and while still loading) so it never flashes on and then
@@ -5510,7 +5600,15 @@ function StudentApp() {
   }
 
   function openPracticeGround() {
+    setView("practiceGroundSection");
+  }
+  function choosePracticeGroundSection(section) {
+    setPracticeGroundSection(section);
     setView("practiceGroundPick");
+  }
+  function backToPracticeGroundSection() {
+    setPracticeGroundSection(null);
+    setView("practiceGroundSection");
   }
   function startPracticeGround(topic, difficulty) {
     setPracticeGroundSelection({ topic, difficulty });
@@ -5617,20 +5715,32 @@ function StudentApp() {
     return <WeakTopicPracticeView topics={practiceTopics} onExit={() => setView("progress")} />;
   }
 
-  if (view === "practiceGroundPick" && examFilter) {
+  if (view === "practiceGroundSection" && examFilter) {
     return (
-      <PracticeGroundPickerView
+      <PracticeGroundSectionPickerView
         exam={EXAMS[examFilter] || EXAMS[DEFAULT_EXAM]}
-        onStart={startPracticeGround}
+        onPick={choosePracticeGroundSection}
         onBack={() => setView("type")}
       />
     );
   }
 
-  if (view === "practiceGroundRun" && practiceGroundSelection) {
+  if (view === "practiceGroundPick" && examFilter && practiceGroundSection) {
+    return (
+      <PracticeGroundPickerView
+        exam={EXAMS[examFilter] || EXAMS[DEFAULT_EXAM]}
+        section={practiceGroundSection}
+        onStart={startPracticeGround}
+        onBack={backToPracticeGroundSection}
+      />
+    );
+  }
+
+  if (view === "practiceGroundRun" && practiceGroundSelection && practiceGroundSection) {
     return (
       <PracticeGroundRunView
         examKey={examFilter}
+        sectionKey={practiceGroundSection.key}
         topic={practiceGroundSelection.topic}
         difficulty={practiceGroundSelection.difficulty}
         onExit={exitPracticeGroundRun}
