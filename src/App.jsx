@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useContext, createContext } from "react";
+import heroCharacter from "./assets/hero-character.png";
+import logoImg from "./assets/logo.png";
 import {
   LayoutDashboard, ListChecks, Plus, Search, Pencil, Eye, Copy, Trash2,
   CheckCircle2, XCircle, AlertCircle, ChevronUp, ChevronDown, Upload,
@@ -6347,11 +6349,10 @@ function SSCSyllabusShowcase() {
   ];
 
   return (
-    <div className="order-2 lg:order-1">
+    <div className="order-2 lg:order-1 relative z-10">
       <div className="mb-7">
-        <div className="flex items-center gap-1.5 text-white font-bold text-sm mb-5 tracking-wide">
-          <Sparkles size={15} className="text-blue-300" /> 100 PERCENTILER
-        </div>
+        <img src={logoImg} alt="100 Percentiler" className="h-12 sm:h-14 w-auto mb-5" />
+
         <div className="inline-flex items-center gap-1.5 bg-white/10 backdrop-blur text-blue-100 text-[11px] font-semibold uppercase tracking-wider px-3 py-1.5 rounded-full mb-4">
           <GraduationCap size={13} /> Built exclusively for SSC CGL
         </div>
@@ -6522,9 +6523,16 @@ function StudentGate({ children }) {
       <div className="geo-bg-gradient relative min-h-screen overflow-hidden">
         <GeometricSignInBackground />
         <div className="relative min-h-screen flex items-center justify-center p-6 py-12">
-          <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-10 items-center">
+          <div className="relative w-full max-w-5xl grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-10 items-center">
+            <img
+              src={heroCharacter}
+              alt=""
+              aria-hidden="true"
+              className="hidden lg:block absolute right-0 top-1/2 -translate-y-1/2 h-[125%] max-h-[820px] object-contain object-bottom pointer-events-none select-none"
+              style={{ filter: "drop-shadow(0 0 55px rgba(56,130,246,0.45))" }}
+            />
             <SSCSyllabusShowcase />
-            <div className="order-1 lg:order-2 animate-fade-slide relative max-w-sm w-full mx-auto lg:mx-0 bg-white/95 backdrop-blur-sm rounded-2xl p-8 text-center shadow-2xl shadow-blue-950/50 border border-white/20">
+            <div className="order-1 lg:order-2 relative z-10 animate-fade-slide max-w-sm w-full mx-auto lg:mx-0 bg-white/95 backdrop-blur-sm rounded-2xl p-8 text-center shadow-2xl shadow-blue-950/50 border border-white/20">
               <div className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 text-xs font-medium px-3 py-1.5 rounded-full mb-5">
                 <Sparkles size={13} /> The 100 Percentiler
               </div>
