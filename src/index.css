@@ -100,6 +100,24 @@ body {
   pointer-events: none;
 }
 
+/* Same drifting-orb idea as .geo-orb, but for light-background screens
+   (mock list, pickers, etc.) — `multiply` blends color into a light
+   backdrop instead of `screen`'s wash-to-white, which only reads well
+   against something dark. */
+.geo-orb-light {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(70px);
+  mix-blend-mode: multiply;
+  animation: orbDrift 24s ease-in-out infinite;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .geo-orb-light {
+    animation: none;
+  }
+}
+
 .geo-shape {
   transition: transform 0.3s ease, opacity 0.3s ease, filter 0.3s ease;
   cursor: pointer;

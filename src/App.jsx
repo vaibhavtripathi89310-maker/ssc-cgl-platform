@@ -5494,6 +5494,22 @@ function WeakTopicPracticeView({ topics, onExit }) {
   );
 }
 
+// Soft, slow-drifting blurred color blobs for light-background "browse and
+// pick something" screens (mock lists, Practice Ground pickers) — the
+// light-mode counterpart to the sign-in hero's dark geometric background,
+// deliberately much quieter since these are task screens people scan and
+// read, not a first-impression hero. Pure CSS (no JS/physics), so it costs
+// nothing to render.
+function AmbientOrbBackground() {
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      <div className="geo-orb-light" style={{ top: "-6%", left: "4%", width: 320, height: 320, background: "rgba(96,165,250,0.35)" }} />
+      <div className="geo-orb-light" style={{ top: "28%", right: "-6%", width: 280, height: 280, background: "rgba(167,139,250,0.3)", animationDelay: "-8s" }} />
+      <div className="geo-orb-light" style={{ bottom: "-10%", left: "32%", width: 260, height: 260, background: "rgba(52,211,153,0.25)", animationDelay: "-16s" }} />
+    </div>
+  );
+}
+
 // ============================================================================
 // PRACTICE GROUND (student) — a standalone question bank picker + runner,
 // separate from mocks entirely (no timer, no fixed question count). Not to
@@ -5511,7 +5527,8 @@ function WeakTopicPracticeView({ topics, onExit }) {
 function PracticeGroundSectionPickerView({ exam, onPick, onBack }) {
   const theme = EXAM_THEME[exam.key];
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50">
+    <div className="relative min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 overflow-hidden">
+      <AmbientOrbBackground />
       <div className={`relative overflow-hidden bg-gradient-to-br ${theme.gradient} text-white px-6 py-10 sm:py-14`}>
         <div className="absolute -right-16 -top-16 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
         <div className="relative max-w-5xl mx-auto">
@@ -5586,7 +5603,8 @@ function PracticeGroundPickerView({ exam, section, onStart, onBack }) {
   const theme = EXAM_THEME[exam.key];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50">
+    <div className="relative min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 overflow-hidden">
+      <AmbientOrbBackground />
       <div className={`relative overflow-hidden bg-gradient-to-br ${theme.gradient} text-white px-6 py-10 sm:py-14`}>
         <div className="absolute -right-16 -top-16 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
         <div className="relative max-w-5xl mx-auto">
@@ -5618,13 +5636,14 @@ function PracticeGroundPickerView({ exam, section, onStart, onBack }) {
           </div>
         ) : (
           <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
-            {topics.map((t) => {
+            {topics.map((t, i) => {
               const style = PRACTICE_SECTION_STYLE[section.key] || DEFAULT_PRACTICE_SECTION_STYLE;
               const total = PRACTICE_DIFFICULTIES.reduce((sum, d) => sum + (t[d] || 0), 0);
               return (
                 <div
                   key={t.topic}
-                  className="group relative overflow-hidden bg-white border border-slate-200 rounded-2xl p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300"
+                  className="group relative overflow-hidden bg-white border border-slate-200 rounded-2xl p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 animate-fade-slide"
+                  style={{ animationDelay: `${Math.min(i, 8) * 40}ms`, animationFillMode: "backwards" }}
                 >
                   <div className={`absolute inset-y-0 left-0 w-1.5 bg-gradient-to-b ${style.bar}`} />
                   <div className="flex items-center gap-3 mb-4">
@@ -6362,7 +6381,8 @@ function StudentApp() {
     const exam = EXAMS[examFilter] || EXAMS[DEFAULT_EXAM];
     const theme = EXAM_THEME[exam.key];
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50">
+      <div className="relative min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 overflow-hidden">
+        <AmbientOrbBackground />
         <div className={`relative overflow-hidden bg-gradient-to-br ${theme.gradient} text-white px-6 py-10 sm:py-14`}>
           <div className="absolute -right-16 -top-16 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
           <div className="relative max-w-5xl mx-auto">
@@ -6395,8 +6415,10 @@ function StudentApp() {
             </div>
           ) : (
             <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 ${typeFilter === "all" ? "" : "mt-8"}`}>
-              {listForType.map((m) => (
-                <StudentMockCard key={m.id} mock={m} onStart={openInstructions} />
+              {listForType.map((m, i) => (
+                <div key={m.id} className="animate-fade-slide" style={{ animationDelay: `${Math.min(i, 8) * 40}ms`, animationFillMode: "backwards" }}>
+                  <StudentMockCard mock={m} onStart={openInstructions} />
+                </div>
               ))}
             </div>
           )}
