@@ -786,31 +786,7 @@ function AnalyticsView({ mocksIndex }) {
     byDay[day].devices.add(r.deviceId);
   });
   const days = Object.keys(byDay).sort();
-  const maxDayAttempts = Math.max(1, ...days.map((d) => byDay[d].attempts));
-
-  // --- Per-mock breakdown ---
-  const perMock = {};
-  scopedRows.forEach((r) => {
-    if (!perMock[r.mockId]) perMock[r.mockId] = { attempts: 0, devices: new Set(), scoreSum: 0, accSum: 0 };
-    const p = perMock[r.mockId];
-    p.attempts += 1;
-    p.devices.add(r.deviceId);
-    p.scoreSum += r.score;
-    // Accuracy is correct ÷ attempted — skipped questions were never
-    // attempted, so they don't dilute this.
-    const attempted = r.correct + r.incorrect;
-    p.accSum += attempted ? r.correct / attempted : 0;
-  });
-  const perMockRows = Object.entries(perMock)
-    .map(([mockId, v]) => ({
-      mockId,
-      title: mocksIndex.find((m) => m.id === mockId)?.title || "Deleted mock",
-      attempts: v.attempts,
-      devices: v.devices.size,
-      avgScore: Math.round((v.scoreSum / v.attempts) * 10) / 10,
-      avgAccuracy: Math.round((v.accSum / v.attempts) * 100),
-    }))
-    .sort((a, b) => b.attempts - a.attempts);
+  const maxDayDevices = Math.max(1, ...days.map((d) => byDay[d].devices.size));
 
   // --- Audience-wide weak topics ---
   const topicAgg = {};
@@ -899,49 +875,20 @@ function AnalyticsView({ mocksIndex }) {
           </div>
 
           <div className="bg-white border border-slate-200 rounded-lg p-4">
-            <h2 className="text-sm font-semibold text-slate-700 mb-3">Daily activity</h2>
+            <h2 className="text-sm font-semibold text-slate-700 mb-3">Daily unique visitors</h2>
             <div className="flex items-end gap-1.5 overflow-x-auto pb-1" style={{ minHeight: 130 }}>
               {days.map((day) => {
                 const v = byDay[day];
-                const height = Math.max(4, Math.round((v.attempts / maxDayAttempts) * 100));
+                const uniqueCount = v.devices.size;
+                const height = Math.max(4, Math.round((uniqueCount / maxDayDevices) * 100));
                 return (
-                  <div key={day} className="flex flex-col items-center shrink-0" style={{ width: 30 }} title={`${v.attempts} attempts, ${v.devices.size} devices`}>
-                    <div className="text-[9px] text-slate-400 mb-1">{v.attempts}</div>
+                  <div key={day} className="flex flex-col items-center shrink-0" style={{ width: 30 }} title={`${uniqueCount} unique visitors, ${v.attempts} attempts`}>
+                    <div className="text-[9px] text-slate-400 mb-1">{uniqueCount}</div>
                     <div className="w-4 bg-blue-600 rounded-t" style={{ height: `${height}px` }} />
                     <div className="text-[8px] text-slate-400 mt-1">{day.slice(5)}</div>
                   </div>
                 );
               })}
-            </div>
-          </div>
-
-          <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-100">
-              <h2 className="text-sm font-semibold text-slate-700">Per-mock breakdown</h2>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 text-xs text-slate-500">
-                  <tr>
-                    <th className="text-left px-4 py-2">Mock</th>
-                    <th className="text-right px-4 py-2">Attempts</th>
-                    <th className="text-right px-4 py-2">Devices</th>
-                    <th className="text-right px-4 py-2">Avg score</th>
-                    <th className="text-right px-4 py-2">Avg accuracy</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {perMockRows.map((r) => (
-                    <tr key={r.mockId} className="border-t border-slate-100">
-                      <td className="px-4 py-2 text-slate-700">{r.title}</td>
-                      <td className="px-4 py-2 text-right text-slate-600">{r.attempts}</td>
-                      <td className="px-4 py-2 text-right text-slate-600">{r.devices}</td>
-                      <td className="px-4 py-2 text-right text-slate-600">{r.avgScore}</td>
-                      <td className="px-4 py-2 text-right text-slate-600">{r.avgAccuracy}%</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
             </div>
           </div>
 
