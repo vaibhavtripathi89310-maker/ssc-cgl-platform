@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useContext, createContext } from "react";
 import {
   LayoutDashboard, ListChecks, Plus, Search, Pencil, Eye, Copy, Trash2,
   CheckCircle2, XCircle, AlertCircle, ChevronUp, ChevronDown, Upload,
   ArrowLeft, ArrowRight, Save, X, Lock, Play, Clock, Flag, Download, LogOut,
   TrendingUp, Target, Youtube, Trophy, Flame, Share2, BarChart2,
   Swords, ThumbsUp, ThumbsDown, Link2, Activity,
-  Landmark, GraduationCap, Award, Sparkles, FileText, Layers, BookOpen,
+  Landmark, GraduationCap, Award, Sparkles, FileText, Layers, BookOpen, Users,
 } from "lucide-react";
 import {
   loadMocksIndex, saveMocksIndex, loadMockQuestions, saveMockQuestions, deleteMockQuestions,
@@ -16,8 +16,10 @@ import {
   loadPracticeTopicSummary, loadPracticeQuestions, loadAllPracticeQuestions,
   savePracticeQuestions, deletePracticeQuestion,
   loadPracticeGroundEnabled, setPracticeGroundEnabled,
+  loadDistinctMockIdsTakenByUser, loadStudentProfile, ensureStudentProfile,
+  saveStudentPhoneNumber, loadAllStudentProfiles, checkIsAdmin,
 } from "./lib/storage";
-import { signIn, signOut, getSession, onAuthStateChange } from "./lib/auth";
+import { signIn, signOut, signInWithGoogle, getSession, onAuthStateChange } from "./lib/auth";
 import { analyzeAttempt } from "./lib/aiAnalysis";
 import { getDeviceId } from "./lib/device";
 import {
@@ -2317,6 +2319,10 @@ function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight) {
 // section, auto-advances when time is up, gives a score at the end.
 // ============================================================================
 function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }) {
+  // null in every context this doesn't apply to (admin's own "Run" preview,
+  // or the un-gated ChallengeFlow) — attempts from those just save without
+  // a user_id, same as before student accounts existed.
+  const studentSession = useStudentSession();
   const [sectionIdx, setSectionIdx] = useState(0);
   const [qIdx, setQIdx] = useState(0);
   const [answers, setAnswers] = useState({}); // questionId -> optionIndex
@@ -2587,6 +2593,7 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
         await saveAttempt({
           id: attemptId,
           deviceId: getDeviceId(),
+          userId: studentSession?.userId,
           mockId: mock.id,
           score,
           correct,
@@ -2601,6 +2608,7 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
         const better = rows.filter((r) => r.score < score).length;
         setPercentile(rows.length > 1 ? Math.round((better / rows.length) * 100) : null);
         setLeaderboard(rows.slice(0, 5));
+        studentSession?.refreshAttemptedMockIds?.();
         if (challengeId) {
           const claimed = await claimOpponentSlot(challengeId, attemptId);
           setChallengeClaim(claimed ? "claimed" : "taken");
@@ -3222,6 +3230,97 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
 // it's the only thing a student browses Practice Ground by, and it's also
 // what a future "practice this topic" link from the AI analysis will match
 // against, so it has to be filled in deliberately, not left blank.
+// ============================================================================
+// LEADS (admin) — every student who's ever signed up (email, always
+// present from Google sign-in) and whichever phone number they've given
+// once they hit the free-tier limit (blank until then). Read-only: no
+// action to take here beyond seeing who to reach out to.
+// ============================================================================
+function StudentLeadsView() {
+  const [profiles, setProfiles] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      try {
+        setProfiles(await loadAllStudentProfiles());
+      } catch {
+        setLoadError(true);
+      } finally {
+        setLoaded(true);
+      }
+    })();
+  }, []);
+
+  const filtered = profiles.filter(
+    (p) => !query || p.email?.toLowerCase().includes(query.toLowerCase()) || p.phoneNumber?.includes(query)
+  );
+  const withPhone = profiles.filter((p) => p.phoneNumber).length;
+
+  return (
+    <div className="max-w-3xl">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <div className="text-sm text-slate-600">
+          <span className="font-semibold text-slate-800">{profiles.length}</span> signed up ·{" "}
+          <span className="font-semibold text-slate-800">{withPhone}</span> gave a phone number
+        </div>
+        <div className="relative w-64">
+          <Search size={13} className="absolute left-2.5 top-2.5 text-slate-400" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search email or phone..."
+            className="w-full text-xs border border-slate-200 rounded-md pl-7 pr-2 py-1.5"
+          />
+        </div>
+      </div>
+
+      {!loaded ? (
+        <div className="text-sm text-slate-400">Loading...</div>
+      ) : loadError ? (
+        <div className="text-center bg-red-50 border border-dashed border-red-200 rounded-xl p-10 text-sm text-red-500">
+          Couldn't load Leads — if you haven't run the setup SQL for the student_profiles/admins tables yet, that's why.
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center bg-white border border-dashed border-slate-300 rounded-xl p-10 text-sm text-slate-400">
+          {profiles.length === 0 ? "No one has signed up yet." : "No match for that search."}
+        </div>
+      ) : (
+        <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs font-semibold text-slate-500">
+                <th className="px-4 py-2.5">Email</th>
+                <th className="px-4 py-2.5">Phone</th>
+                <th className="px-4 py-2.5">Signed up</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filtered.map((p) => (
+                <tr key={p.id}>
+                  <td className="px-4 py-2.5 text-slate-700">{p.email}</td>
+                  <td className="px-4 py-2.5">
+                    {p.phoneNumber ? (
+                      <span className="text-slate-700">{p.phoneNumber}</span>
+                    ) : (
+                      <span className="text-slate-300">— not given yet —</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2.5 text-slate-400 text-xs">
+                    {p.createdAt ? new Date(p.createdAt).toLocaleDateString() : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PracticeQuestionForm({ initial, topicOptions, defaultTopic, onSave, onCancel }) {
   const [q, setQ] = useState(
     initial || { id: generateId("pq"), topic: defaultTopic || "", difficulty: "Easy", text: "", options: ["", "", "", ""], answer: 0, explanation: "" }
@@ -3936,6 +4035,7 @@ function AdminPanel() {
     { key: "list", label: "Mock Tests", icon: ListChecks, onClick: goList },
     { key: "analytics", label: "Analytics", icon: Activity, onClick: () => setView("analytics") },
     { key: "practiceBank", label: "Practice Bank", icon: BookOpen, onClick: () => setView("practiceBank") },
+    { key: "leads", label: "Leads", icon: Users, onClick: () => setView("leads") },
     { key: "cutoffs", label: "Cutoffs", icon: BarChart2, onClick: () => setView("cutoffs") },
     { key: "import", label: "Import Data", icon: Upload, onClick: () => setView("import") },
   ];
@@ -3988,6 +4088,7 @@ function AdminPanel() {
             {view === "list" && "Mock Tests"}
             {view === "analytics" && "Analytics"}
             {view === "practiceBank" && "Practice Bank"}
+            {view === "leads" && "Leads"}
             {view === "cutoffs" && "Cutoffs"}
             {view === "import" && "Import Data"}
             {view === "editor" && activeMock?.title}
@@ -4015,6 +4116,7 @@ function AdminPanel() {
           )}
           {view === "analytics" && <AnalyticsView mocksIndex={mocksIndex} />}
           {view === "practiceBank" && <PracticeBankView />}
+          {view === "leads" && <StudentLeadsView />}
           {view === "cutoffs" && <CutoffsView />}
           {view === "import" && <ImportDataView onImport={importData} />}
           {view === "editor" && activeMock && activeQuestions && (
@@ -5415,6 +5517,7 @@ function PracticeGroundPickerView({ exam, section, onStart, onBack }) {
 }
 
 function PracticeGroundRunView({ examKey, sectionKey, topic, difficulty, onExit }) {
+  const studentSession = useStudentSession();
   const [loading, setLoading] = useState(true);
   const [list, setList] = useState([]);
   const [idx, setIdx] = useState(0);
@@ -5483,6 +5586,20 @@ function PracticeGroundRunView({ examKey, sectionKey, topic, difficulty, onExit 
     );
   }
 
+  // Free tier: FREE_PRACTICE_QUESTIONS_PER_TOPIC questions per topic, then
+  // the same phone-number gate that guards mocks. Once unlocked, this never
+  // shows again for the rest of the account's lifetime, in any topic.
+  if (!studentSession?.hasUnlocked && idx >= FREE_PRACTICE_QUESTIONS_PER_TOPIC) {
+    return (
+      <div className="min-h-screen bg-slate-100">
+        <div className="flex justify-center pt-6">
+          <button onClick={onExit} className="text-sm text-slate-500">← Exit practice</button>
+        </div>
+        <PhoneNumberGate reason={`You've used your ${FREE_PRACTICE_QUESTIONS_PER_TOPIC} free questions in ${topic} — enter your phone number to unlock every mock and practice question.`} />
+      </div>
+    );
+  }
+
   const q = list[idx];
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col items-center py-10 px-4">
@@ -5541,6 +5658,7 @@ function PracticeGroundRunView({ examKey, sectionKey, topic, difficulty, onExit 
 }
 
 function StudentApp() {
+  const studentSession = useStudentSession();
   const [mocksIndex, setMocksIndex] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [view, setView] = useState("exam"); // 'exam' | 'type' | 'list' | 'instructions' | 'run'
@@ -5553,6 +5671,7 @@ function StudentApp() {
   const [practiceTopics, setPracticeTopics] = useState(null);
   const [practiceGroundSection, setPracticeGroundSection] = useState(null); // one of exam.sections, chosen first
   const [practiceGroundSelection, setPracticeGroundSelection] = useState(null); // { topic, difficulty }
+  const [pendingGatedMock, setPendingGatedMock] = useState(null); // a mock blocked by the free-tier limit, resumed once phone is given
   // Global admin-controlled switch (see PracticeBankView) — hidden by
   // default (and while still loading) so it never flashes on and then
   // disappears; only ever shown once we've confirmed it's actually on.
@@ -5673,7 +5792,29 @@ function StudentApp() {
     refreshMocks();
   }
 
+  // Once the phone-number gate is cleared (hasUnlocked flips true), resume
+  // straight into whichever mock triggered it — the student never has to
+  // re-click anything after providing their number.
+  useEffect(() => {
+    if (view === "phoneGate" && pendingGatedMock && studentSession?.hasUnlocked) {
+      const mock = pendingGatedMock;
+      setPendingGatedMock(null);
+      openInstructions(mock);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [studentSession?.hasUnlocked, view, pendingGatedMock]);
+
   async function openInstructions(mock) {
+    // Free tier: FREE_MOCK_LIMIT distinct mocks per account, then a phone
+    // number unlocks the rest permanently. A mock already attempted before
+    // never re-triggers this, however many times it's retaken.
+    const alreadyAttempted = studentSession?.attemptedMockIds?.has(mock.id);
+    const atFreeLimit = (studentSession?.attemptedMockIds?.size || 0) >= FREE_MOCK_LIMIT;
+    if (!studentSession?.hasUnlocked && !alreadyAttempted && atFreeLimit) {
+      setPendingGatedMock(mock);
+      setView("phoneGate");
+      return;
+    }
     setSelectedMock(mock);
     // Honest limitation: this loads the FULL question objects — including
     // the correct `answer` field — into this browser tab's memory, because
@@ -5757,6 +5898,14 @@ function StudentApp() {
         difficulty={practiceGroundSelection.difficulty}
         onExit={exitPracticeGroundRun}
       />
+    );
+  }
+
+  if (view === "phoneGate" && pendingGatedMock) {
+    return (
+      <div className="min-h-screen bg-slate-50">
+        <PhoneNumberGate reason={`You've used your ${FREE_MOCK_LIMIT} free mocks — enter your phone number to unlock every mock and practice question.`} />
+      </div>
     );
   }
 
@@ -6046,8 +6195,164 @@ function StudentApp() {
 // rejected by the database itself for anyone without a valid session, even
 // if this component were bypassed entirely.
 // ============================================================================
+// ============================================================================
+// STUDENT ACCOUNTS — Google sign-in required for anything on the student
+// side (ChallengeFlow is the one exception, left open on purpose: it's a
+// friend-invite link, and gating that behind a login would kill the viral
+// loop it exists for). Free tier: FREE_MOCK_LIMIT distinct mocks and
+// FREE_PRACTICE_QUESTIONS_PER_TOPIC questions per Practice Ground topic —
+// beyond either, a one-time phone number (collected, not OTP-verified: see
+// [[project ... auth]] memory for why) unlocks everything for that account
+// permanently. student_profiles is the one new table this needs; attempts
+// gained a nullable user_id alongside its existing device_id so this can
+// count a student's real distinct-mock history regardless of device.
+// ============================================================================
+const FREE_MOCK_LIMIT = 3;
+const FREE_PRACTICE_QUESTIONS_PER_TOPIC = 3;
+
+const StudentSessionContext = createContext(null);
+function useStudentSession() {
+  return useContext(StudentSessionContext);
+}
+
+// Shown inline wherever a student hits the free-tier ceiling. Not OTP-verified
+// — collected as plain text, purely for the admin's own outreach/marketing
+// list (see the "Leads" admin panel) — verifying it would mean paying for
+// SMS delivery, which this app otherwise deliberately avoids everywhere else.
+function PhoneNumberGate({ reason }) {
+  const { saveMyPhoneNumber } = useStudentSession();
+  const [phone, setPhone] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    const digitsOnly = phone.replace(/[\s()+-]/g, "");
+    if (!/^\d{7,15}$/.test(digitsOnly)) {
+      setError("Enter a valid phone number.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      await saveMyPhoneNumber(phone.trim());
+    } catch {
+      setError("Couldn't save that — please try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="min-h-[60vh] flex items-center justify-center p-6">
+      <div className="max-w-sm w-full bg-white border border-slate-200 rounded-2xl shadow-sm p-8 text-center">
+        <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center mx-auto mb-4">
+          <Lock size={20} className="text-blue-700" />
+        </div>
+        <h2 className="text-lg font-semibold text-slate-800 mb-1.5">One more step</h2>
+        <p className="text-sm text-slate-500 mb-5">{reason}</p>
+        <form onSubmit={handleSubmit}>
+          <input
+            type="tel"
+            autoFocus
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="Phone number"
+            className="w-full text-sm border border-slate-200 rounded-md px-3 py-2.5 mb-3 text-center"
+          />
+          {error && <p className="text-xs text-red-600 mb-3">{error}</p>}
+          <button
+            type="submit"
+            disabled={saving}
+            className="w-full bg-blue-900 text-white text-sm font-medium rounded-lg py-2.5 disabled:opacity-50"
+          >
+            {saving ? "Saving..." : "Continue"}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function StudentGate({ children }) {
+  const [session, setSession] = useState(undefined); // undefined = checking, null = signed out
+  const [profile, setProfile] = useState(null);
+  const [profileLoaded, setProfileLoaded] = useState(false);
+  const [attemptedMockIds, setAttemptedMockIds] = useState(new Set());
+
+  useEffect(() => {
+    getSession().then(setSession);
+    return onAuthStateChange(setSession);
+  }, []);
+
+  useEffect(() => {
+    if (!session) return;
+    (async () => {
+      const p = await ensureStudentProfile(session.user.id, session.user.email);
+      setProfile(p);
+      setProfileLoaded(true);
+      setAttemptedMockIds(new Set(await loadDistinctMockIdsTakenByUser(session.user.id)));
+    })();
+  }, [session]);
+
+  async function saveMyPhoneNumber(phone) {
+    await saveStudentPhoneNumber(session.user.id, phone);
+    setProfile((p) => ({ ...p, phoneNumber: phone }));
+  }
+
+  async function refreshAttemptedMockIds() {
+    if (!session) return;
+    setAttemptedMockIds(new Set(await loadDistinctMockIdsTakenByUser(session.user.id)));
+  }
+
+  if (session === undefined) {
+    return <div className="min-h-screen flex items-center justify-center text-sm text-slate-400">Loading...</div>;
+  }
+
+  if (!session) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-950 via-blue-900 to-indigo-900 flex items-center justify-center p-6">
+        <div className="max-w-sm w-full bg-white rounded-2xl p-8 text-center">
+          <div className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 text-xs font-medium px-3 py-1.5 rounded-full mb-5">
+            <Sparkles size={13} /> The 100 Percentiler
+          </div>
+          <h1 className="text-lg font-semibold text-slate-800 mb-1.5">Sign in to continue</h1>
+          <p className="text-sm text-slate-500 mb-6">Sign in with Google to take mock tests and practice questions.</p>
+          <button
+            onClick={() => signInWithGoogle()}
+            className="w-full flex items-center justify-center gap-2 border border-slate-200 text-slate-700 text-sm font-medium rounded-lg py-2.5 hover:bg-slate-50 transition-colors"
+          >
+            Continue with Google
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!profileLoaded) {
+    return <div className="min-h-screen flex items-center justify-center text-sm text-slate-400">Loading...</div>;
+  }
+
+  return (
+    <StudentSessionContext.Provider
+      value={{
+        userId: session.user.id,
+        email: session.user.email,
+        phoneNumber: profile?.phoneNumber || null,
+        hasUnlocked: !!profile?.phoneNumber,
+        attemptedMockIds,
+        refreshAttemptedMockIds,
+        saveMyPhoneNumber,
+      }}
+    >
+      {children}
+    </StudentSessionContext.Provider>
+  );
+}
+
 function AdminGate({ children }) {
   const [session, setSession] = useState(undefined); // undefined = checking, null = signed out
+  const [isAdmin, setIsAdmin] = useState(undefined); // undefined = checking, null/false = not admin
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -6057,6 +6362,20 @@ function AdminGate({ children }) {
     getSession().then(setSession);
     return onAuthStateChange(setSession);
   }, []);
+
+  // A valid Supabase session no longer means "is the admin" now that
+  // students also get real accounts via Google sign-in — every session gets
+  // checked against the admins table before anything renders.
+  useEffect(() => {
+    if (!session) {
+      setIsAdmin(session === null ? false : undefined);
+      return;
+    }
+    setIsAdmin(undefined);
+    checkIsAdmin(session.user.id)
+      .then(setIsAdmin)
+      .catch(() => setIsAdmin(false));
+  }, [session]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -6071,11 +6390,25 @@ function AdminGate({ children }) {
     }
   }
 
-  if (session === undefined) {
+  if (session === undefined || (session && isAdmin === undefined)) {
     return <div className="min-h-screen flex items-center justify-center text-sm text-slate-400">Loading...</div>;
   }
 
-  if (session) return children;
+  if (session && isAdmin) return children;
+
+  if (session && !isAdmin) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
+        <div className="bg-white rounded-2xl p-8 max-w-sm w-full text-center">
+          <h1 className="text-lg font-semibold text-slate-800 mb-1">Not an admin account</h1>
+          <p className="text-sm text-slate-500 mb-5">This Google account isn't authorized for admin access.</p>
+          <button onClick={signOut} className="text-sm px-4 py-2 rounded-md border border-slate-200 text-slate-600">
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
@@ -6464,5 +6797,9 @@ export default function App() {
       </AdminGate>
     );
   }
-  return <StudentApp />;
+  return (
+    <StudentGate>
+      <StudentApp />
+    </StudentGate>
+  );
 }

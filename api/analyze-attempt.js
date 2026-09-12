@@ -1,9 +1,10 @@
 // Vercel serverless function — the app's first-ever backend endpoint.
 // Takes one finished mock attempt's answer data, asks Gemini's free-tier API
 // for a structured, plain-English performance breakdown, and returns it.
-// Gated to signed-in Supabase sessions only (i.e. the one admin account) —
-// students never call this, and it's never reachable from the public
-// results screen, only from the admin panel's own "Run" flow.
+// Gated to the admin account specifically (checked against the `admins`
+// table, not just "any signed-in session" — students have real accounts
+// too now) — never reachable from the public results screen, only from the
+// admin panel's own "Run" flow.
 import { createClient } from "@supabase/supabase-js";
 
 // Free-tier Gemini models get deprioritized under load and return a 503
@@ -158,14 +159,22 @@ export default async function handler(req, res) {
     return;
   }
 
-  // Proves the caller holds a valid, non-expired Supabase session — since
-  // this project has exactly one account (the admin's own, created directly
-  // in the Supabase dashboard), being signed in IS being the admin. Same
-  // trust model AdminGate itself already uses.
+  // A valid Supabase session no longer means "is the admin" — students now
+  // also get real accounts via Google sign-in. Check the admins table
+  // explicitly, same fix applied to AdminGate itself client-side.
   const supabase = createClient(supabaseUrl, supabaseAnonKey);
   const { data: userData, error: userError } = await supabase.auth.getUser(token);
   if (userError || !userData?.user) {
     res.status(401).json({ error: "Invalid or expired session." });
+    return;
+  }
+  const { data: adminRow, error: adminError } = await supabase
+    .from("admins")
+    .select("id")
+    .eq("id", userData.user.id)
+    .maybeSingle();
+  if (adminError || !adminRow) {
+    res.status(403).json({ error: "This account isn't authorized for AI analysis." });
     return;
   }
 

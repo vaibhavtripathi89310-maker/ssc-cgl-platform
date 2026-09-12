@@ -166,6 +166,13 @@ export async function saveAttempt(attempt) {
   const { error } = await supabase.from("attempts").insert({
     id: attempt.id,
     device_id: attempt.deviceId,
+    // Nullable — only present once student logins exist. Kept alongside
+    // device_id rather than replacing it: device_id still drives My
+    // Progress/leaderboard everywhere else, user_id exists purely so the
+    // free-mock-count gate can count a student's distinct attempts by real
+    // identity instead of by device (which resets if they clear storage or
+    // switch browsers).
+    user_id: attempt.userId || null,
     mock_id: attempt.mockId,
     score: attempt.score,
     correct: attempt.correct,
@@ -177,6 +184,16 @@ export async function saveAttempt(attempt) {
     time_spent: attempt.timeSpent,
   });
   if (error) throw error;
+}
+
+// Every DISTINCT mock id this signed-in student has ever attempted — the
+// free-tier gate ("3 free mocks, then phone number required") counts
+// distinct mocks, not attempts, so retaking an already-attempted mock never
+// counts against the limit and is never re-blocked.
+export async function loadDistinctMockIdsTakenByUser(userId) {
+  const { data, error } = await supabase.from("attempts").select("mock_id").eq("user_id", userId);
+  if (error) throw error;
+  return [...new Set((data || []).map((r) => r.mock_id))];
 }
 
 export async function loadAttemptById(id) {
@@ -439,6 +456,18 @@ export async function savePracticeQuestions(exam, section, questions) {
   if (error) throw error;
 }
 
+// Is this signed-in user THE admin, not just "someone with a valid
+// session"? Needed because student accounts now also produce valid Supabase
+// sessions (Google sign-in) — being authenticated stopped meaning "is the
+// admin" the moment students got real logins too. RLS on `admins` only ever
+// lets a user see their own row (or nothing, if they're not in it), so this
+// is safe to call from the client with no other credential involved.
+export async function checkIsAdmin(userId) {
+  const { data, error } = await supabase.from("admins").select("id").eq("id", userId).maybeSingle();
+  if (error) throw error;
+  return !!data;
+}
+
 export async function deletePracticeQuestion(id) {
   const { error } = await supabase.from("practice_questions").delete().eq("id", id);
   if (error) throw error;
@@ -458,4 +487,43 @@ export async function loadPracticeGroundEnabled() {
 export async function setPracticeGroundEnabled(enabled) {
   const { error } = await supabase.from("app_settings").upsert({ key: "practice_ground_enabled", value: enabled });
   if (error) throw error;
+}
+
+// ============================================================================
+// STUDENT PROFILES — one row per real (Google-authenticated) student
+// account: email (always present, from the OAuth sign-in itself) and phone
+// number (initially null — collected once the student hits the free-tier
+// gate). RLS: a student can only read/write their own row; admin can read
+// every row (that's the whole point — a single "Leads" list of everyone
+// who's signed up and what phone numbers they've given).
+// ============================================================================
+export async function loadStudentProfile(userId) {
+  const { data, error } = await supabase.from("student_profiles").select("*").eq("id", userId).maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return { id: data.id, email: data.email, phoneNumber: data.phone_number, createdAt: data.created_at };
+}
+
+// Idempotent — safe to call on every sign-in. Only ever creates the row if
+// it's missing; never overwrites an existing phone number with null.
+export async function ensureStudentProfile(userId, email) {
+  const existing = await loadStudentProfile(userId);
+  if (existing) return existing;
+  const { error } = await supabase.from("student_profiles").insert({ id: userId, email });
+  if (error) throw error;
+  return { id: userId, email, phoneNumber: null, createdAt: null };
+}
+
+export async function saveStudentPhoneNumber(userId, phoneNumber) {
+  const { error } = await supabase.from("student_profiles").update({ phone_number: phoneNumber }).eq("id", userId);
+  if (error) throw error;
+}
+
+// Admin's "Leads" list — every student who has ever signed up, and whichever
+// phone number (if any) they've given. RLS only lets the admin account
+// actually see every row; a student calling this would just get their own.
+export async function loadAllStudentProfiles() {
+  const { data, error } = await supabase.from("student_profiles").select("*").order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data || []).map((r) => ({ id: r.id, email: r.email, phoneNumber: r.phone_number, createdAt: r.created_at }));
 }
