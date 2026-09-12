@@ -5673,11 +5673,20 @@ function formatExplanationParagraphs(text) {
 function PracticeGroundRunView({ examKey, sectionKey, topic, difficulty, onExit }) {
   const studentSession = useStudentSession();
   const [loading, setLoading] = useState(true);
+  const [currentDifficulty, setCurrentDifficulty] = useState(difficulty);
+  const [coveredDifficulties, setCoveredDifficulties] = useState([difficulty]);
   const [list, setList] = useState([]);
   const [idx, setIdx] = useState(0);
   const [selected, setSelected] = useState(null);
   const [correctCount, setCorrectCount] = useState(0);
+  // Counts every question the student has moved past, across every
+  // difficulty tier — unlike `idx`, which resets to 0 each time the tier
+  // chains up to the next one. This is what both the free-tier gate and the
+  // final "X / Y correct" stat need: a running total for the whole session,
+  // not just the current tier's list.
+  const [totalSeen, setTotalSeen] = useState(0);
   const [done, setDone] = useState(false);
+  const [advancing, setAdvancing] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -5697,12 +5706,38 @@ function PracticeGroundRunView({ examKey, sectionKey, topic, difficulty, onExit 
     setSelected(i);
     if (i === list[idx].answer) setCorrectCount((c) => c + 1);
   }
-  function next() {
+
+  // Easy → Medium → Hard happens automatically: finishing the last question
+  // of one tier moves straight into the next one instead of stopping, and a
+  // tier with nothing uploaded for this topic is skipped rather than ending
+  // the session early. Only once every remaining tier is either finished or
+  // empty does this actually end the practice session.
+  async function next() {
+    setTotalSeen((n) => n + 1);
     if (idx < list.length - 1) {
       setIdx((x) => x + 1);
       setSelected(null);
-    } else {
+      return;
+    }
+    setAdvancing(true);
+    try {
+      let nextTierIdx = PRACTICE_DIFFICULTIES.indexOf(currentDifficulty) + 1;
+      while (nextTierIdx < PRACTICE_DIFFICULTIES.length) {
+        const nextDifficulty = PRACTICE_DIFFICULTIES[nextTierIdx];
+        const nextList = await loadPracticeQuestions(examKey, sectionKey, topic, nextDifficulty);
+        if (nextList.length > 0) {
+          setCurrentDifficulty(nextDifficulty);
+          setCoveredDifficulties((arr) => [...arr, nextDifficulty]);
+          setList(nextList);
+          setIdx(0);
+          setSelected(null);
+          return;
+        }
+        nextTierIdx++;
+      }
       setDone(true);
+    } finally {
+      setAdvancing(false);
     }
   }
 
@@ -5730,7 +5765,7 @@ function PracticeGroundRunView({ examKey, sectionKey, topic, difficulty, onExit 
           <Target className="mx-auto mb-4 text-blue-700" size={40} />
           <h2 className="text-xl font-semibold text-slate-800 mb-1">Practice complete</h2>
           <p className="text-sm text-slate-500 mb-6">
-            {correctCount} / {list.length} correct · {topic} ({difficulty})
+            {correctCount} / {totalSeen} correct · {topic} ({coveredDifficulties.join(" → ")})
           </p>
           <button onClick={onExit} className="text-sm px-5 py-2.5 rounded-lg bg-slate-900 text-white">
             Back to Practice Ground
@@ -5740,10 +5775,12 @@ function PracticeGroundRunView({ examKey, sectionKey, topic, difficulty, onExit 
     );
   }
 
-  // Free tier: FREE_PRACTICE_QUESTIONS_PER_TOPIC questions per topic, then
-  // the same phone-number gate that guards mocks. Once unlocked, this never
+  // Free tier: FREE_PRACTICE_QUESTIONS_PER_TOPIC questions per topic (summed
+  // across every difficulty in this session, not per tier — otherwise
+  // chaining into Medium/Hard would silently reset the free count), then the
+  // same phone-number gate that guards mocks. Once unlocked, this never
   // shows again for the rest of the account's lifetime, in any topic.
-  if (!studentSession?.hasUnlocked && idx >= FREE_PRACTICE_QUESTIONS_PER_TOPIC) {
+  if (!studentSession?.hasUnlocked && totalSeen >= FREE_PRACTICE_QUESTIONS_PER_TOPIC) {
     return (
       <div className="min-h-screen bg-slate-100">
         <div className="flex justify-center pt-6">
@@ -5756,6 +5793,9 @@ function PracticeGroundRunView({ examKey, sectionKey, topic, difficulty, onExit 
 
   const q = list[idx];
   const answered = selected !== null;
+  const isLastTier = PRACTICE_DIFFICULTIES.indexOf(currentDifficulty) === PRACTICE_DIFFICULTIES.length - 1;
+  const isLastQuestionOfTier = idx === list.length - 1;
+  const nextLabel = advancing ? "Loading..." : isLastQuestionOfTier && isLastTier ? "Finish practice" : "Next question";
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col items-center py-10 px-4">
       <div className={`w-full transition-all ${answered ? "max-w-5xl" : "max-w-2xl"}`}>
@@ -5763,7 +5803,7 @@ function PracticeGroundRunView({ examKey, sectionKey, topic, difficulty, onExit 
           <button onClick={onExit} className="text-sm text-slate-500">← Exit practice</button>
           <span className="text-xs text-slate-400 flex items-center gap-1.5">
             Question {idx + 1} of {list.length} · {topic}
-            <span className={`px-1.5 py-0.5 rounded border ${PRACTICE_DIFFICULTY_COLORS[difficulty]}`}>{difficulty}</span>
+            <span className={`px-1.5 py-0.5 rounded border ${PRACTICE_DIFFICULTY_COLORS[currentDifficulty]}`}>{currentDifficulty}</span>
           </span>
         </div>
         <div className={`grid gap-6 ${answered ? "grid-cols-1 lg:grid-cols-[1fr_340px]" : "grid-cols-1"}`}>
@@ -5818,8 +5858,12 @@ function PracticeGroundRunView({ examKey, sectionKey, topic, difficulty, onExit 
                   </div>
                 </div>
               )}
-              <button onClick={next} className="text-sm px-5 py-2.5 rounded-lg bg-blue-900 text-white font-medium">
-                {idx < list.length - 1 ? "Next question" : "Finish practice"}
+              <button
+                onClick={next}
+                disabled={advancing}
+                className="text-sm px-5 py-2.5 rounded-lg bg-blue-900 text-white font-medium disabled:opacity-60"
+              >
+                {nextLabel}
               </button>
             </div>
           )}
