@@ -6339,18 +6339,40 @@ function SSCSyllabusShowcase() {
     },
   ];
 
+  const features = [
+    { icon: Clock, label: "Real Exam-Pattern Mocks" },
+    { icon: BarChart2, label: "Deep Performance Analysis" },
+    { icon: BookOpen, label: "Topic-wise Practice" },
+    { icon: Trophy, label: "Leaderboard & Streaks" },
+  ];
+
   return (
     <div className="order-2 lg:order-1">
-      <div className="mb-5">
-        <div className="inline-flex items-center gap-1.5 bg-white/10 backdrop-blur text-blue-100 text-xs font-medium px-3 py-1.5 rounded-full mb-4">
-          <GraduationCap size={13} /> The complete SSC CGL syllabus
+      <div className="mb-7">
+        <div className="flex items-center gap-1.5 text-white font-bold text-sm mb-5 tracking-wide">
+          <Sparkles size={15} className="text-blue-300" /> 100 PERCENTILER
         </div>
-        <h2 className="text-2xl sm:text-3xl font-bold text-white leading-tight mb-2">
-          Everything you need to master, <span className="text-blue-300">in one place.</span>
-        </h2>
-        <p className="text-sm text-blue-200/80 max-w-md">
-          Real mock tests, topic-wise practice, and AI-backed analysis across all four sections.
+        <div className="inline-flex items-center gap-1.5 bg-white/10 backdrop-blur text-blue-100 text-[11px] font-semibold uppercase tracking-wider px-3 py-1.5 rounded-full mb-4">
+          <GraduationCap size={13} /> Built exclusively for SSC CGL
+        </div>
+        <h1
+          className="text-3xl sm:text-4xl font-extrabold text-white leading-tight mb-3"
+          style={{ textShadow: "0 0 40px rgba(96,165,250,0.35)" }}
+        >
+          The <span className="bg-gradient-to-r from-sky-300 via-blue-300 to-indigo-300 bg-clip-text text-transparent">Smartest</span> SSC CGL Test Portal.
+        </h1>
+        <p className="text-sm text-blue-200/80 max-w-md mb-6">
+          Real exam-pattern mocks, topic-wise practice mapped to the actual syllabus, and deep performance
+          analysis after every attempt — all in one place.
         </p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {features.map((f) => (
+            <div key={f.label} className="flex flex-col items-center text-center gap-2 bg-white/5 border border-white/10 rounded-xl px-2 py-3">
+              <f.icon size={17} className="text-blue-300" />
+              <span className="text-[11px] text-blue-100/90 leading-tight">{f.label}</span>
+            </div>
+          ))}
+        </div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {sections.map((s) => (
