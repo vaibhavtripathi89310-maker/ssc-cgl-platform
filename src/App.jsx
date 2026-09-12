@@ -5686,7 +5686,7 @@ function PracticeGroundRunView({ examKey, sectionKey, topic, difficulty, onExit 
         <div className="flex justify-center pt-6">
           <button onClick={onExit} className="text-sm text-slate-500">← Exit practice</button>
         </div>
-        <PhoneNumberGate reason={`You've used your ${FREE_PRACTICE_QUESTIONS_PER_TOPIC} free questions in ${topic} — enter your phone number to unlock every mock and practice question.`} />
+        <PhoneNumberGate />
       </div>
     );
   }
@@ -5995,7 +5995,7 @@ function StudentApp() {
   if (view === "phoneGate" && pendingGatedMock) {
     return (
       <div className="min-h-screen bg-slate-50">
-        <PhoneNumberGate reason={`You've used your ${FREE_MOCK_LIMIT} free mocks — enter your phone number to unlock every mock and practice question.`} />
+        <PhoneNumberGate />
       </div>
     );
   }
@@ -6310,7 +6310,7 @@ function useStudentSession() {
 // — collected as plain text, purely for the admin's own outreach/marketing
 // list (see the "Leads" admin panel) — verifying it would mean paying for
 // SMS delivery, which this app otherwise deliberately avoids everywhere else.
-function PhoneNumberGate({ reason }) {
+function PhoneNumberGate() {
   const { saveMyPhoneNumber } = useStudentSession();
   const [phone, setPhone] = useState("");
   const [saving, setSaving] = useState(false);
@@ -6340,8 +6340,7 @@ function PhoneNumberGate({ reason }) {
         <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center mx-auto mb-4">
           <Lock size={20} className="text-blue-700" />
         </div>
-        <h2 className="text-lg font-semibold text-slate-800 mb-1.5">One more step</h2>
-        <p className="text-sm text-slate-500 mb-5">{reason}</p>
+        <h2 className="text-lg font-semibold text-slate-800 mb-5">Sign up with your phone number to continue</h2>
         <form onSubmit={handleSubmit}>
           <input
             type="tel"
