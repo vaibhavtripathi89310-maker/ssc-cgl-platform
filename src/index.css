@@ -31,6 +31,76 @@ body {
   animation: fadeSlideIn 0.25s ease-out;
 }
 
+/* ============================================================================
+   SIGN-IN SCREEN — GEOMETRIC BACKGROUND
+   A field of floating outline shapes behind the Google sign-in card. Two
+   independent motions layer on the same shape without fighting over the
+   `transform` property: an outer wrapper gets a cursor-driven parallax
+   translate (via CSS custom properties updated directly on the DOM node in
+   JS — no React re-render per mousemove), and an inner wrapper gets a
+   constant slow float/rotate keyframe animation. Each shape is also
+   directly hoverable (pointer-events enabled) for a real, immediate
+   reaction, not just a proximity-based approximation.
+   ============================================================================ */
+@keyframes geoFloatA {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  50% { transform: translate(14px, -18px) rotate(12deg); }
+}
+@keyframes geoFloatB {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  50% { transform: translate(-16px, 14px) rotate(-10deg); }
+}
+@keyframes geoSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes geoPulse {
+  0%, 100% { opacity: 0.35; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.08); }
+}
+@keyframes gradientDrift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.geo-bg-gradient {
+  background: linear-gradient(120deg, #172554, #1e3a8a, #312e81, #1e1b4b, #1e3a8a);
+  background-size: 300% 300%;
+  animation: gradientDrift 18s ease-in-out infinite;
+}
+
+.geo-parallax {
+  transform: translate(
+    calc(var(--mx, 0) * var(--depth, 1) * 1px),
+    calc(var(--my, 0) * var(--depth, 1) * 1px)
+  );
+  transition: transform 0.15s ease-out;
+}
+
+.geo-shape {
+  transition: transform 0.3s ease, opacity 0.3s ease, filter 0.3s ease;
+  cursor: pointer;
+}
+.geo-shape:hover {
+  transform: scale(1.35) !important;
+  opacity: 1 !important;
+  filter: brightness(1.6) drop-shadow(0 0 18px rgba(147, 197, 253, 0.8));
+}
+
+.geo-float-a { animation: geoFloatA 7s ease-in-out infinite; }
+.geo-float-b { animation: geoFloatB 9s ease-in-out infinite; }
+.geo-spin-slow { animation: geoSpin 40s linear infinite; }
+.geo-spin-slow-rev { animation: geoSpin 55s linear infinite reverse; }
+.geo-pulse { animation: geoPulse 5s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .geo-bg-gradient, .geo-float-a, .geo-float-b, .geo-spin-slow, .geo-spin-slow-rev, .geo-pulse {
+    animation: none;
+  }
+  .geo-parallax { transform: none; }
+}
+
 /* PDF export (results screen "Download PDF") is just the browser's own
    print-to-PDF — no library. Browsers strip background colors/badges by
    default when printing unless told otherwise, which would flatten every

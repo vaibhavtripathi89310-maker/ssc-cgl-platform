@@ -6274,6 +6274,101 @@ function PhoneNumberGate({ reason }) {
   );
 }
 
+// Cursor-reactive geometric background for the sign-in screen — purely
+// decorative, built entirely in CSS (no animation library). Mouse position
+// is written straight onto the container's CSS custom properties via a ref
+// on every mousemove, not through React state, so this never triggers a
+// re-render no matter how fast the cursor moves. Each shape is wrapped in
+// two layers: an outer div whose transform comes from those `--mx`/`--my`
+// vars scaled by its own `--depth` (parallax — shapes "closer" to the
+// viewer drift further), and an inner div carrying a constant slow
+// float/rotate/pulse keyframe animation, so the ambient motion and the
+// cursor-driven motion never fight over the same `transform` property.
+// Every shape is also directly hoverable (see .geo-shape in index.css) for
+// an immediate reaction, not just an approximated proximity effect.
+function GeometricSignInBackground() {
+  const containerRef = useRef(null);
+
+  function handleMouseMove(e) {
+    const el = containerRef.current;
+    if (!el) return;
+    const mx = (e.clientX / window.innerWidth - 0.5) * 40;
+    const my = (e.clientY / window.innerHeight - 0.5) * 40;
+    el.style.setProperty("--mx", mx.toFixed(2));
+    el.style.setProperty("--my", my.toFixed(2));
+  }
+
+  const shapes = [
+    { style: { top: "8%", left: "10%", width: 90, height: 90 }, depth: 0.5, anim: "geo-float-a", kind: "ring" },
+    { style: { top: "16%", right: "14%", width: 60, height: 60 }, depth: 0.9, anim: "geo-spin-slow", kind: "triangle" },
+    { style: { bottom: "14%", left: "16%", width: 70, height: 70 }, depth: 0.7, anim: "geo-spin-slow-rev", kind: "hexagon" },
+    { style: { bottom: "10%", right: "10%", width: 46, height: 46 }, depth: 1.2, anim: "geo-float-b", kind: "diamond" },
+    { style: { top: "42%", left: "6%", width: 22, height: 22 }, depth: 1.4, anim: "geo-pulse", kind: "dot" },
+    { style: { top: "60%", right: "8%", width: 18, height: 18 }, depth: 1.3, anim: "geo-pulse", kind: "dot" },
+    { style: { top: "8%", left: "45%", width: 14, height: 14 }, depth: 1.5, anim: "geo-float-a", kind: "dot" },
+    { style: { bottom: "30%", right: "30%", width: 50, height: 50 }, depth: 0.4, anim: "geo-float-b", kind: "ring" },
+    { style: { top: "70%", left: "38%", width: 40, height: 40 }, depth: 0.8, anim: "geo-spin-slow", kind: "triangle" },
+    { style: { top: "30%", right: "38%", width: 130, height: 130 }, depth: 0.2, anim: "geo-pulse", kind: "ring" },
+  ];
+
+  function renderShape(kind) {
+    if (kind === "ring") {
+      return <div className="geo-shape w-full h-full rounded-full border-2 border-blue-300/40" />;
+    }
+    if (kind === "dot") {
+      return <div className="geo-shape w-full h-full rounded-full bg-blue-200/50" />;
+    }
+    if (kind === "diamond") {
+      return <div className="geo-shape w-full h-full border-2 border-indigo-200/40" style={{ transform: "rotate(45deg)" }} />;
+    }
+    if (kind === "triangle") {
+      // Border + clip-path clips the whole box (border included), which
+      // only leaves fragments of the outline visible rather than a clean
+      // triangle — an SVG stroke with no fill draws the actual outline.
+      return (
+        <svg viewBox="0 0 100 100" className="geo-shape w-full h-full">
+          <polygon points="50,4 4,96 96,96" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-sky-200/40" />
+        </svg>
+      );
+    }
+    if (kind === "hexagon") {
+      return (
+        <svg viewBox="0 0 100 100" className="geo-shape w-full h-full">
+          <polygon
+            points="25,4 75,4 96,50 75,96 25,96 4,50"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            className="text-indigo-200/40"
+          />
+        </svg>
+      );
+    }
+    return null;
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      onMouseMove={handleMouseMove}
+      className="absolute inset-0 overflow-hidden pointer-events-none"
+      style={{ "--mx": 0, "--my": 0 }}
+    >
+      {shapes.map((s, i) => (
+        <div
+          key={i}
+          className="geo-parallax absolute pointer-events-auto"
+          style={{ ...s.style, "--depth": s.depth }}
+        >
+          <div className={s.anim} style={{ width: "100%", height: "100%" }}>
+            {renderShape(s.kind)}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function StudentGate({ children }) {
   const [session, setSession] = useState(undefined); // undefined = checking, null = signed out
   const [profile, setProfile] = useState(null);
@@ -6311,8 +6406,9 @@ function StudentGate({ children }) {
 
   if (!session) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-950 via-blue-900 to-indigo-900 flex items-center justify-center p-6">
-        <div className="max-w-sm w-full bg-white rounded-2xl p-8 text-center">
+      <div className="geo-bg-gradient relative min-h-screen flex items-center justify-center p-6 overflow-hidden">
+        <GeometricSignInBackground />
+        <div className="animate-fade-slide relative max-w-sm w-full bg-white/95 backdrop-blur-sm rounded-2xl p-8 text-center shadow-2xl shadow-blue-950/50 border border-white/20">
           <div className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 text-xs font-medium px-3 py-1.5 rounded-full mb-5">
             <Sparkles size={13} /> The 100 Percentiler
           </div>
@@ -6320,7 +6416,7 @@ function StudentGate({ children }) {
           <p className="text-sm text-slate-500 mb-6">Sign in with Google to take mock tests and practice questions.</p>
           <button
             onClick={() => signInWithGoogle()}
-            className="w-full flex items-center justify-center gap-2 border border-slate-200 text-slate-700 text-sm font-medium rounded-lg py-2.5 hover:bg-slate-50 transition-colors"
+            className="w-full flex items-center justify-center gap-2 border border-slate-200 text-slate-700 text-sm font-medium rounded-lg py-2.5 hover:bg-slate-50 hover:shadow-md hover:-translate-y-0.5 transition-all"
           >
             Continue with Google
           </button>
