@@ -17,7 +17,7 @@ import {
   createChallenge, loadChallenge, claimOpponentSlot, setChallengeReaction, loadAttemptById,
   loadAttemptsInRange,
   loadPracticeTopicSummary, loadPracticeQuestions, loadAllPracticeQuestions,
-  savePracticeQuestions, deletePracticeQuestion,
+  savePracticeQuestions, deletePracticeQuestion, deletePracticeQuestions,
   loadPracticeGroundEnabled, setPracticeGroundEnabled,
   loadDistinctMockIdsTakenByUser, loadStudentProfile, ensureStudentProfile,
   saveStudentPhoneNumber, loadAllStudentProfiles, checkIsAdmin,
@@ -3438,6 +3438,9 @@ function PracticeBankView() {
   const [loaded, setLoaded] = useState(false);
   const [filterTopic, setFilterTopic] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [confirmingBulkDelete, setConfirmingBulkDelete] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [enabledLoaded, setEnabledLoaded] = useState(false);
@@ -3467,6 +3470,7 @@ function PracticeBankView() {
   const refresh = useCallback(async () => {
     setLoaded(false);
     setLoadError(false);
+    setSelectedIds(new Set());
     try {
       setQuestions(await loadAllPracticeQuestions(examKey, sectionKey));
     } catch {
@@ -3528,6 +3532,36 @@ function PracticeBankView() {
     await deletePracticeQuestion(deleteTarget.id);
     setDeleteTarget(null);
     refresh();
+  }
+
+  function toggleSelected(id) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectGroup(qs) {
+    const groupIds = qs.map((q) => q.id);
+    const allSelected = groupIds.every((id) => selectedIds.has(id));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      groupIds.forEach((id) => (allSelected ? next.delete(id) : next.add(id)));
+      return next;
+    });
+  }
+
+  async function confirmBulkDelete() {
+    setBulkDeleting(true);
+    try {
+      await deletePracticeQuestions([...selectedIds]);
+      setConfirmingBulkDelete(false);
+      await refresh();
+    } finally {
+      setBulkDeleting(false);
+    }
   }
 
   async function saveManualQuestion(question) {
@@ -3691,6 +3725,36 @@ function PracticeBankView() {
         </div>
       </div>
 
+      {filtered.length > 0 && (
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <label className="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={filtered.every((q) => selectedIds.has(q.id))}
+              onChange={() => toggleSelectGroup(filtered)}
+              className="rounded border-slate-300"
+            />
+            {selectedIds.size > 0 ? `${selectedIds.size} selected` : "Select all"}
+          </label>
+          {selectedIds.size > 0 && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setSelectedIds(new Set())}
+                className="text-xs text-slate-500 hover:text-slate-700"
+              >
+                Clear selection
+              </button>
+              <button
+                onClick={() => setConfirmingBulkDelete(true)}
+                className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-md bg-red-50 border border-red-200 text-red-600 hover:bg-red-100"
+              >
+                <Trash2 size={12} /> Delete {selectedIds.size} question{selectedIds.size === 1 ? "" : "s"}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {(addingNew || editingQuestion) && (
         <div className="mb-5">
           <PracticeQuestionForm
@@ -3721,7 +3785,13 @@ function PracticeBankView() {
         <div className="space-y-5">
           {Object.entries(topicGroups).map(([topic, qs]) => (
             <div key={topic} className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-              <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600">
+              <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={qs.every((q) => selectedIds.has(q.id))}
+                  onChange={() => toggleSelectGroup(qs)}
+                  className="rounded border-slate-300"
+                />
                 {topic} · {qs.length} question{qs.length === 1 ? "" : "s"}
               </div>
               <div className="divide-y divide-slate-100">
@@ -3734,6 +3804,13 @@ function PracticeBankView() {
                     }}
                     className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-slate-50"
                   >
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(q.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={() => toggleSelected(q.id)}
+                      className="rounded border-slate-300 shrink-0"
+                    />
                     <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border shrink-0 ${PRACTICE_DIFFICULTY_COLORS[q.difficulty]}`}>
                       {q.difficulty}
                     </span>
@@ -3765,6 +3842,17 @@ function PracticeBankView() {
           danger
           onConfirm={confirmDelete}
           onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+
+      {confirmingBulkDelete && (
+        <ConfirmModal
+          title={`Delete ${selectedIds.size} question${selectedIds.size === 1 ? "" : "s"}?`}
+          body="This removes all selected questions permanently from the Practice Ground bank. This cannot be undone."
+          confirmLabel={bulkDeleting ? "Deleting..." : "Delete"}
+          danger
+          onConfirm={confirmBulkDelete}
+          onCancel={() => setConfirmingBulkDelete(false)}
         />
       )}
     </div>

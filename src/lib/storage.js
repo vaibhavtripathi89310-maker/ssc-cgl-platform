@@ -473,6 +473,13 @@ export async function deletePracticeQuestion(id) {
   if (error) throw error;
 }
 
+// Bulk variant for the admin's "select several, delete them all" flow — one
+// round trip instead of one delete per question.
+export async function deletePracticeQuestions(ids) {
+  const { error } = await supabase.from("practice_questions").delete().in("id", ids);
+  if (error) throw error;
+}
+
 // A single global on/off switch for whether the Practice Ground card shows
 // up on the student side at all — stored server-side (not localStorage) so
 // toggling it actually controls what every student sees, not just this
