@@ -8,8 +8,7 @@ import {
   TrendingUp, Target, Youtube, Trophy, Flame, Share2, BarChart2,
   Swords, ThumbsUp, ThumbsDown, Link2, Activity,
   Landmark, GraduationCap, Award, Sparkles, FileText, Layers, BookOpen, Users,
-  Calculator, Percent, Triangle, Ruler, Puzzle, Shuffle, Compass, LayoutGrid,
-  SpellCheck, MessageSquare, PenTool, Globe, Atom, Newspaper,
+  Zap, ShieldCheck, MousePointerClick,
 } from "lucide-react";
 import {
   loadMocksIndex, saveMocksIndex, loadMockQuestions, saveMockQuestions, deleteMockQuestions,
@@ -6290,119 +6289,54 @@ function PhoneNumberGate({ reason }) {
 // cursor-driven motion never fight over the same `transform` property.
 // Every shape is also directly hoverable (see .geo-shape in index.css) for
 // an immediate reaction, not just an approximated proximity effect.
-// Real content for the sign-in screen's first impression — the actual SSC
-// CGL syllabus (same 4 sections as EXAMS.ssc_cgl.sections), not generic
-// marketing copy. Topic labels here are a curated, illustrative handful per
-// section (not the full CURATED_PRACTICE_TOPICS list) since this is a
-// glanceable showcase, not a data-driven listing.
+// Real content for the sign-in screen's first impression — a punchy hero
+// built entirely from features that actually exist in the product (no
+// syllabus-topic listing here anymore; that read as cluttered and forced a
+// second row of cards below the fold). Every chip below maps to a real,
+// shipped capability — nothing here is a stat or a feature we haven't built.
 function SSCSyllabusShowcase() {
-  const sections = [
-    {
-      label: "General Intelligence & Reasoning",
-      icon: Puzzle,
-      accent: "text-violet-300 bg-violet-500/20 border-violet-400/30",
-      bar: "from-violet-400 to-violet-600",
-      topics: [
-        { icon: Shuffle, label: "Analogy & Series" },
-        { icon: Link2, label: "Blood Relations" },
-        { icon: Compass, label: "Direction Sense" },
-        { icon: LayoutGrid, label: "Puzzles & Seating" },
-      ],
-    },
-    {
-      label: "Quantitative Aptitude",
-      icon: Calculator,
-      accent: "text-sky-300 bg-sky-500/20 border-sky-400/30",
-      bar: "from-sky-400 to-sky-600",
-      topics: [
-        { icon: Percent, label: "Percentage & Ratios" },
-        { icon: Triangle, label: "Geometry & Mensuration" },
-        { icon: Ruler, label: "Trigonometry" },
-        { icon: TrendingUp, label: "Data Interpretation" },
-      ],
-    },
-    {
-      label: "English Comprehension",
-      icon: BookOpen,
-      accent: "text-emerald-300 bg-emerald-500/20 border-emerald-400/30",
-      bar: "from-emerald-400 to-emerald-600",
-      topics: [
-        { icon: MessageSquare, label: "Reading Comprehension" },
-        { icon: SpellCheck, label: "Grammar & Error Spotting" },
-        { icon: PenTool, label: "Vocabulary & Idioms" },
-      ],
-    },
-    {
-      label: "General Awareness",
-      icon: Landmark,
-      accent: "text-amber-300 bg-amber-500/20 border-amber-400/30",
-      bar: "from-amber-400 to-amber-600",
-      topics: [
-        { icon: Globe, label: "History & Geography" },
-        { icon: Atom, label: "Science" },
-        { icon: Newspaper, label: "Current Affairs" },
-      ],
-    },
-  ];
-
   const features = [
     { icon: Clock, label: "Real Exam-Pattern Mocks" },
-    { icon: BarChart2, label: "Deep Performance Analysis" },
+    { icon: BarChart2, label: "AI Performance Analysis" },
     { icon: BookOpen, label: "Topic-wise Practice" },
     { icon: Trophy, label: "Leaderboard & Streaks" },
   ];
 
   return (
     <div className="order-2 lg:order-1 relative z-10">
-      <div className="mb-4">
-        <img src={logoImg} alt="100 Percentiler" className="h-9 sm:h-10 w-auto mb-3" />
+      <img src={logoImg} alt="100 Percentiler" className="h-10 sm:h-11 w-auto mb-4" />
 
-        <div className="inline-flex items-center gap-1.5 bg-white/10 backdrop-blur text-blue-100 text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full mb-2.5">
-          <GraduationCap size={12} /> Built exclusively for SSC CGL
-        </div>
-        <h1
-          className="text-xl sm:text-2xl font-extrabold text-white leading-tight mb-2"
-          style={{ textShadow: "0 0 40px rgba(96,165,250,0.35)" }}
-        >
-          The <span className="bg-gradient-to-r from-sky-300 via-blue-300 to-indigo-300 bg-clip-text text-transparent">Smartest</span> SSC CGL Test Portal.
-        </h1>
-        <p className="text-xs text-blue-200/80 max-w-md mb-3">
-          Real exam-pattern mocks, topic-wise practice mapped to the actual syllabus, and deep performance
-          analysis after every attempt — all in one place.
-        </p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {features.map((f) => (
-            <div
-              key={f.label}
-              className="flex flex-col items-center text-center gap-1.5 bg-blue-950/40 backdrop-blur border border-blue-400/20 rounded-xl px-2 py-2 hover:border-blue-300/60 hover:shadow-[0_0_20px_rgba(59,130,246,0.35)] transition-all duration-300"
-            >
-              <div className="w-7 h-7 rounded-full bg-blue-500/10 border border-blue-400/30 flex items-center justify-center">
-                <f.icon size={13} className="text-blue-300" />
-              </div>
-              <span className="text-[10px] text-blue-100/90 leading-tight">{f.label}</span>
-            </div>
-          ))}
-        </div>
+      <div className="flex items-center gap-1.5 text-blue-300/60 text-[10px] font-semibold uppercase tracking-widest mb-4">
+        <span>Practice</span><ArrowRight size={10} />
+        <span>Analyze</span><ArrowRight size={10} />
+        <span>Improve</span><ArrowRight size={10} />
+        <span className="text-blue-200">Succeed</span>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-        {sections.map((s) => (
+
+      <div className="inline-flex items-center gap-1.5 bg-white/10 backdrop-blur text-blue-100 text-[11px] font-semibold uppercase tracking-wider px-3 py-1.5 rounded-full mb-4">
+        <GraduationCap size={13} /> Built exclusively for SSC CGL
+      </div>
+      <h1
+        className="text-3xl sm:text-4xl font-extrabold text-white leading-tight mb-3"
+        style={{ textShadow: "0 0 40px rgba(96,165,250,0.35)" }}
+      >
+        Not Just Mock Tests.<br />
+        <span className="bg-gradient-to-r from-sky-300 via-blue-300 to-indigo-300 bg-clip-text text-transparent">AI-Powered</span> Exam Prep.
+      </h1>
+      <p className="text-sm text-blue-200/80 max-w-md mb-6">
+        Real exam-pattern mocks, topic-wise practice mapped to the actual syllabus, and deep performance
+        analysis after every attempt — all in one place.
+      </p>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-lg">
+        {features.map((f) => (
           <div
-            key={s.label}
-            className="group relative bg-blue-950/40 backdrop-blur border border-blue-400/20 rounded-2xl p-2.5 overflow-hidden hover:border-blue-300/50 hover:-translate-y-1 hover:shadow-[0_0_25px_rgba(59,130,246,0.3)] transition-all duration-300"
+            key={f.label}
+            className="flex flex-col items-center text-center gap-2 bg-blue-950/40 backdrop-blur border border-blue-400/20 rounded-xl px-2 py-3.5 hover:border-blue-300/60 hover:shadow-[0_0_20px_rgba(59,130,246,0.35)] transition-all duration-300"
           >
-            <div className={`absolute inset-y-0 left-0 w-1 bg-gradient-to-b ${s.bar}`} />
-            <div className={`w-7 h-7 rounded-lg flex items-center justify-center mb-2 border ${s.accent}`}>
-              <s.icon size={14} />
+            <div className="w-9 h-9 rounded-full bg-blue-500/10 border border-blue-400/30 flex items-center justify-center">
+              <f.icon size={16} className="text-blue-300" />
             </div>
-            <h3 className="text-[11px] font-semibold text-white mb-1.5 leading-tight">{s.label}</h3>
-            <div className="space-y-1">
-              {s.topics.slice(0, 3).map((t) => (
-                <div key={t.label} className="flex items-center gap-1 text-[10px] text-blue-200/70">
-                  <t.icon size={10} className="shrink-0" />
-                  <span className="truncate">{t.label}</span>
-                </div>
-              ))}
-            </div>
+            <span className="text-[11px] text-blue-100/90 leading-tight">{f.label}</span>
           </div>
         ))}
       </div>
@@ -6546,7 +6480,7 @@ function StudentGate({ children }) {
               <div className="inline-flex items-center gap-1.5 bg-blue-500/15 text-blue-200 border border-blue-400/30 text-xs font-medium px-3 py-1.5 rounded-full mb-4">
                 <Sparkles size={13} /> The 100 Percentiler
               </div>
-              <h1 className="text-lg font-semibold text-white mb-1.5">Sign in to continue</h1>
+              <h1 className="text-lg font-semibold text-white mb-1.5">Welcome back</h1>
               <p className="text-sm text-blue-200/80 mb-5">Sign in with Google to take mock tests and practice questions.</p>
               <button
                 onClick={() => signInWithGoogle()}
@@ -6554,6 +6488,20 @@ function StudentGate({ children }) {
               >
                 Continue with Google
               </button>
+              <div className="flex items-center justify-center gap-4 mt-5 pt-4 border-t border-blue-400/15">
+                <div className="flex flex-col items-center gap-1 text-blue-300/70">
+                  <Zap size={14} />
+                  <span className="text-[9px] leading-tight text-center">Fast<br />&amp; Secure</span>
+                </div>
+                <div className="flex flex-col items-center gap-1 text-blue-300/70">
+                  <ShieldCheck size={14} />
+                  <span className="text-[9px] leading-tight text-center">Data Stays<br />Private</span>
+                </div>
+                <div className="flex flex-col items-center gap-1 text-blue-300/70">
+                  <MousePointerClick size={14} />
+                  <span className="text-[9px] leading-tight text-center">One-Click<br />Access</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
