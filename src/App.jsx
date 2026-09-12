@@ -6304,7 +6304,7 @@ function SSCSyllabusShowcase() {
 
   return (
     <div className="order-2 lg:order-1 relative z-10">
-      <img src={logoImg} alt="100 Percentiler" className="h-11 sm:h-12 w-auto mb-5" />
+      <img src={logoImg} alt="100 Percentiler" className="h-16 sm:h-20 w-auto mb-5" />
 
       <div className="flex items-center gap-2 text-blue-300/70 text-xs font-semibold uppercase tracking-widest mb-4">
         <span>Practice</span><ArrowRight size={12} />
