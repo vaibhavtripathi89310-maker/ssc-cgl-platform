@@ -5648,6 +5648,28 @@ function PracticeGroundPickerView({ exam, section, onStart, onBack }) {
   );
 }
 
+// Practice Ground explanations are uploaded as one JSON string field, so a
+// multi-step explanation like "Step 1: ... Step 2: ... Step 3: ... Option C
+// is correct." arrives as one unbroken run of text with no real line breaks
+// to render. Split it back into readable paragraphs client-side: one per
+// "Step N:" marker, and the trailing "Option X is correct." sentence (if
+// present) pulled out as its own concluding line.
+function formatExplanationParagraphs(text) {
+  if (!text) return [];
+  const stepSplit = text.split(/(?=Step\s+\d+\s*:)/g).map((s) => s.trim()).filter(Boolean);
+  const paragraphs = [];
+  stepSplit.forEach((seg) => {
+    const match = seg.match(/^(.*?)([.!?])\s*(Option\s+[A-D]\s+is\s+correct\.?)\s*$/i);
+    if (match && match[1].trim()) {
+      paragraphs.push(`${match[1].trim()}${match[2]}`);
+      paragraphs.push(match[3].trim());
+    } else {
+      paragraphs.push(seg);
+    }
+  });
+  return paragraphs;
+}
+
 function PracticeGroundRunView({ examKey, sectionKey, topic, difficulty, onExit }) {
   const studentSession = useStudentSession();
   const [loading, setLoading] = useState(true);
@@ -5733,9 +5755,10 @@ function PracticeGroundRunView({ examKey, sectionKey, topic, difficulty, onExit 
   }
 
   const q = list[idx];
+  const answered = selected !== null;
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col items-center py-10 px-4">
-      <div className="max-w-2xl w-full">
+      <div className={`w-full transition-all ${answered ? "max-w-5xl" : "max-w-2xl"}`}>
         <div className="flex items-center justify-between mb-3">
           <button onClick={onExit} className="text-sm text-slate-500">← Exit practice</button>
           <span className="text-xs text-slate-400 flex items-center gap-1.5">
@@ -5743,47 +5766,64 @@ function PracticeGroundRunView({ examKey, sectionKey, topic, difficulty, onExit 
             <span className={`px-1.5 py-0.5 rounded border ${PRACTICE_DIFFICULTY_COLORS[difficulty]}`}>{difficulty}</span>
           </span>
         </div>
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-8">
-          <p className="text-lg leading-relaxed text-slate-900 mb-6 font-medium">
-            <MathText text={q.text} />
-          </p>
-          <div className="space-y-3">
-            {q.options.map((opt, i) => {
-              const isRight = i === q.answer;
-              const isPicked = i === selected;
-              let cls = "border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50";
-              if (selected !== null) {
-                if (isRight) cls = "border-emerald-400 bg-emerald-50 text-emerald-800";
-                else if (isPicked) cls = "border-red-300 bg-red-50 text-red-700";
-              }
-              return (
-                <button
-                  key={i}
-                  onClick={() => choose(i)}
-                  disabled={selected !== null}
-                  className={`w-full flex items-center gap-3 text-left px-5 py-3.5 rounded-xl border-2 text-base transition-colors ${cls}`}
-                >
-                  <span className="w-7 h-7 shrink-0 rounded-full flex items-center justify-center text-sm font-semibold bg-slate-100 text-slate-500">
-                    {LETTERS[i]}
-                  </span>
-                  <MathText text={opt} />
-                </button>
-              );
-            })}
-          </div>
-          {selected !== null && q.explanation && (
-            <p className="text-xs text-slate-500 mt-4 italic">
-              <MathText text={q.explanation} />
+        <div className={`grid gap-6 ${answered ? "grid-cols-1 lg:grid-cols-[1fr_340px]" : "grid-cols-1"}`}>
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-8">
+            <p className="text-lg leading-relaxed text-slate-900 mb-6 font-medium">
+              <MathText text={q.text} />
             </p>
+            <div className="space-y-3">
+              {q.options.map((opt, i) => {
+                const isRight = i === q.answer;
+                const isPicked = i === selected;
+                let cls = "border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50";
+                if (selected !== null) {
+                  if (isRight) cls = "border-emerald-400 bg-emerald-50 text-emerald-800";
+                  else if (isPicked) cls = "border-red-300 bg-red-50 text-red-700";
+                }
+                return (
+                  <button
+                    key={i}
+                    onClick={() => choose(i)}
+                    disabled={selected !== null}
+                    className={`w-full flex items-center gap-3 text-left px-5 py-3.5 rounded-xl border-2 text-base transition-colors ${cls}`}
+                  >
+                    <span className="w-7 h-7 shrink-0 rounded-full flex items-center justify-center text-sm font-semibold bg-slate-100 text-slate-500">
+                      {LETTERS[i]}
+                    </span>
+                    <MathText text={opt} />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {answered && (
+            <div className="flex flex-col gap-4">
+              {q.explanation && (
+                <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-5">
+                  <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Explanation</div>
+                  <div className="space-y-2.5">
+                    {formatExplanationParagraphs(q.explanation).map((p, i) => (
+                      <p
+                        key={i}
+                        className={
+                          /^Option\s+[A-D]\s+is\s+correct/i.test(p)
+                            ? "text-sm font-semibold text-emerald-700"
+                            : "text-sm text-slate-600 leading-relaxed"
+                        }
+                      >
+                        <MathText text={p} />
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <button onClick={next} className="text-sm px-5 py-2.5 rounded-lg bg-blue-900 text-white font-medium">
+                {idx < list.length - 1 ? "Next question" : "Finish practice"}
+              </button>
+            </div>
           )}
         </div>
-        {selected !== null && (
-          <div className="flex justify-end mt-4">
-            <button onClick={next} className="text-sm px-5 py-2.5 rounded-lg bg-blue-900 text-white font-medium">
-              {idx < list.length - 1 ? "Next question" : "Finish practice"}
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );
