@@ -3455,18 +3455,13 @@ function PracticeBankView() {
     setSelectedTopic(topicOptions?.[0] || "");
   }, [sectionKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Deliberately picking a topic up top (to tag newly-pasted questions)
-  // also narrows the list below to that same topic — without this, picking
-  // "Medieval Indian History" while the list still showed everything,
-  // starting with "Ancient Indian History" (just alphabetical order), read
-  // as if the wrong topic's questions were being served. This only fires
-  // from an actual admin click/keystroke below, not from the automatic
-  // reset-to-first-topic above (switching sections would otherwise blank
-  // the list to whatever topic happens to be first, even with nothing
-  // uploaded for it yet, instead of still showing everything by default).
+  // Picking a topic up top only changes what new pasted questions get
+  // tagged with — it does NOT touch the list below by itself. Narrowing the
+  // list to that topic is a separate, explicit action (the "Show only these
+  // questions" button next to the dropdown), so there's no ambiguity about
+  // whether the list is currently filtered or not.
   function pickTopic(value) {
     setSelectedTopic(value);
-    setFilterTopic(value);
   }
 
   const refresh = useCallback(async () => {
@@ -3643,28 +3638,47 @@ function PracticeBankView() {
           <label className="block text-[11px] font-medium text-slate-500 mb-1">
             Topic — every question pasted below gets tagged with this one
           </label>
-          {topicOptions ? (
-            <select
-              value={selectedTopic}
-              onChange={(e) => pickTopic(e.target.value)}
-              className="w-full sm:w-80 text-sm border border-slate-200 rounded-md px-3 py-1.5"
-            >
-              {topicOptions.map((t) => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
-          ) : (
-            <>
+          <div className="flex flex-wrap items-center gap-2">
+            {topicOptions ? (
+              <select
+                value={selectedTopic}
+                onChange={(e) => pickTopic(e.target.value)}
+                className="w-full sm:w-80 text-sm border border-slate-200 rounded-md px-3 py-1.5"
+              >
+                {topicOptions.map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            ) : (
               <input
                 value={selectedTopic}
                 onChange={(e) => pickTopic(e.target.value)}
                 placeholder="e.g. Verbal Reasoning"
                 className="w-full sm:w-80 text-sm border border-slate-200 rounded-md px-3 py-1.5"
               />
-              <div className="text-[11px] text-slate-400 mt-1">
-                No curated topic list built yet for {EXAMS[examKey].label} — type one directly for now.
-              </div>
-            </>
+            )}
+            <button
+              type="button"
+              onClick={() => setFilterTopic(selectedTopic)}
+              disabled={!selectedTopic || filterTopic === selectedTopic}
+              className="text-xs px-3 py-1.5 rounded-md bg-slate-800 text-white disabled:opacity-40 disabled:cursor-default shrink-0"
+            >
+              Show only these questions
+            </button>
+            {filterTopic && (
+              <button
+                type="button"
+                onClick={() => setFilterTopic("")}
+                className="text-xs px-3 py-1.5 rounded-md border border-slate-200 text-slate-500 shrink-0"
+              >
+                Show all topics
+              </button>
+            )}
+          </div>
+          {!topicOptions && (
+            <div className="text-[11px] text-slate-400 mt-1">
+              No curated topic list built yet for {EXAMS[examKey].label} — type one directly for now.
+            </div>
           )}
         </div>
 
