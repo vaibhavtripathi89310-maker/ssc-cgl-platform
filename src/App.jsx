@@ -6,6 +6,8 @@ import {
   TrendingUp, Target, Youtube, Trophy, Flame, Share2, BarChart2,
   Swords, ThumbsUp, ThumbsDown, Link2, Activity,
   Landmark, GraduationCap, Award, Sparkles, FileText, Layers, BookOpen, Users,
+  Calculator, Percent, Triangle, Ruler, Puzzle, Shuffle, Compass, LayoutGrid,
+  SpellCheck, MessageSquare, PenTool, Globe, Atom, Newspaper,
 } from "lucide-react";
 import {
   loadMocksIndex, saveMocksIndex, loadMockQuestions, saveMockQuestions, deleteMockQuestions,
@@ -6286,6 +6288,95 @@ function PhoneNumberGate({ reason }) {
 // cursor-driven motion never fight over the same `transform` property.
 // Every shape is also directly hoverable (see .geo-shape in index.css) for
 // an immediate reaction, not just an approximated proximity effect.
+// Real content for the sign-in screen's first impression — the actual SSC
+// CGL syllabus (same 4 sections as EXAMS.ssc_cgl.sections), not generic
+// marketing copy. Topic labels here are a curated, illustrative handful per
+// section (not the full CURATED_PRACTICE_TOPICS list) since this is a
+// glanceable showcase, not a data-driven listing.
+function SSCSyllabusShowcase() {
+  const sections = [
+    {
+      label: "General Intelligence & Reasoning",
+      icon: Puzzle,
+      accent: "text-violet-300 bg-violet-500/20 border-violet-400/30",
+      topics: [
+        { icon: Shuffle, label: "Analogy & Series" },
+        { icon: Link2, label: "Blood Relations" },
+        { icon: Compass, label: "Direction Sense" },
+        { icon: LayoutGrid, label: "Puzzles & Seating" },
+      ],
+    },
+    {
+      label: "Quantitative Aptitude",
+      icon: Calculator,
+      accent: "text-sky-300 bg-sky-500/20 border-sky-400/30",
+      topics: [
+        { icon: Percent, label: "Percentage & Ratios" },
+        { icon: Triangle, label: "Geometry & Mensuration" },
+        { icon: Ruler, label: "Trigonometry" },
+        { icon: TrendingUp, label: "Data Interpretation" },
+      ],
+    },
+    {
+      label: "English Comprehension",
+      icon: BookOpen,
+      accent: "text-emerald-300 bg-emerald-500/20 border-emerald-400/30",
+      topics: [
+        { icon: MessageSquare, label: "Reading Comprehension" },
+        { icon: SpellCheck, label: "Grammar & Error Spotting" },
+        { icon: PenTool, label: "Vocabulary & Idioms" },
+      ],
+    },
+    {
+      label: "General Awareness",
+      icon: Landmark,
+      accent: "text-amber-300 bg-amber-500/20 border-amber-400/30",
+      topics: [
+        { icon: Globe, label: "History & Geography" },
+        { icon: Atom, label: "Science" },
+        { icon: Newspaper, label: "Current Affairs" },
+      ],
+    },
+  ];
+
+  return (
+    <div className="order-2 lg:order-1">
+      <div className="mb-5">
+        <div className="inline-flex items-center gap-1.5 bg-white/10 backdrop-blur text-blue-100 text-xs font-medium px-3 py-1.5 rounded-full mb-4">
+          <GraduationCap size={13} /> The complete SSC CGL syllabus
+        </div>
+        <h2 className="text-2xl sm:text-3xl font-bold text-white leading-tight mb-2">
+          Everything you need to master, <span className="text-blue-300">in one place.</span>
+        </h2>
+        <p className="text-sm text-blue-200/80 max-w-md">
+          Real mock tests, topic-wise practice, and AI-backed analysis across all four sections.
+        </p>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {sections.map((s) => (
+          <div
+            key={s.label}
+            className="group bg-white/5 backdrop-blur border border-white/10 rounded-2xl p-4 hover:bg-white/10 hover:-translate-y-1 transition-all duration-300"
+          >
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-3 border ${s.accent}`}>
+              <s.icon size={17} />
+            </div>
+            <h3 className="text-sm font-semibold text-white mb-2.5">{s.label}</h3>
+            <div className="space-y-1.5">
+              {s.topics.map((t) => (
+                <div key={t.label} className="flex items-center gap-1.5 text-[11px] text-blue-200/70">
+                  <t.icon size={11} className="shrink-0" />
+                  {t.label}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function GeometricSignInBackground() {
   const containerRef = useRef(null);
 
@@ -6406,20 +6497,25 @@ function StudentGate({ children }) {
 
   if (!session) {
     return (
-      <div className="geo-bg-gradient relative min-h-screen flex items-center justify-center p-6 overflow-hidden">
+      <div className="geo-bg-gradient relative min-h-screen overflow-hidden">
         <GeometricSignInBackground />
-        <div className="animate-fade-slide relative max-w-sm w-full bg-white/95 backdrop-blur-sm rounded-2xl p-8 text-center shadow-2xl shadow-blue-950/50 border border-white/20">
-          <div className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 text-xs font-medium px-3 py-1.5 rounded-full mb-5">
-            <Sparkles size={13} /> The 100 Percentiler
+        <div className="relative min-h-screen flex items-center justify-center p-6 py-12">
+          <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-10 items-center">
+            <SSCSyllabusShowcase />
+            <div className="order-1 lg:order-2 animate-fade-slide relative max-w-sm w-full mx-auto lg:mx-0 bg-white/95 backdrop-blur-sm rounded-2xl p-8 text-center shadow-2xl shadow-blue-950/50 border border-white/20">
+              <div className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 text-xs font-medium px-3 py-1.5 rounded-full mb-5">
+                <Sparkles size={13} /> The 100 Percentiler
+              </div>
+              <h1 className="text-lg font-semibold text-slate-800 mb-1.5">Sign in to continue</h1>
+              <p className="text-sm text-slate-500 mb-6">Sign in with Google to take mock tests and practice questions.</p>
+              <button
+                onClick={() => signInWithGoogle()}
+                className="w-full flex items-center justify-center gap-2 border border-slate-200 text-slate-700 text-sm font-medium rounded-lg py-2.5 hover:bg-slate-50 hover:shadow-md hover:-translate-y-0.5 transition-all"
+              >
+                Continue with Google
+              </button>
+            </div>
           </div>
-          <h1 className="text-lg font-semibold text-slate-800 mb-1.5">Sign in to continue</h1>
-          <p className="text-sm text-slate-500 mb-6">Sign in with Google to take mock tests and practice questions.</p>
-          <button
-            onClick={() => signInWithGoogle()}
-            className="w-full flex items-center justify-center gap-2 border border-slate-200 text-slate-700 text-sm font-medium rounded-lg py-2.5 hover:bg-slate-50 hover:shadow-md hover:-translate-y-0.5 transition-all"
-          >
-            Continue with Google
-          </button>
         </div>
       </div>
     );
