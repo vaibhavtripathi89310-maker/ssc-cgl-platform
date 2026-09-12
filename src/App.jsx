@@ -6304,26 +6304,26 @@ function SSCSyllabusShowcase() {
 
   return (
     <div className="order-2 lg:order-1 relative z-10">
-      <img src={logoImg} alt="100 Percentiler" className="h-10 sm:h-11 w-auto mb-4" />
+      <img src={logoImg} alt="100 Percentiler" className="h-11 sm:h-12 w-auto mb-5" />
 
-      <div className="flex items-center gap-1.5 text-blue-300/60 text-[10px] font-semibold uppercase tracking-widest mb-4">
-        <span>Practice</span><ArrowRight size={10} />
-        <span>Analyze</span><ArrowRight size={10} />
-        <span>Improve</span><ArrowRight size={10} />
+      <div className="flex items-center gap-2 text-blue-300/70 text-xs font-semibold uppercase tracking-widest mb-4">
+        <span>Practice</span><ArrowRight size={12} />
+        <span>Analyze</span><ArrowRight size={12} />
+        <span>Improve</span><ArrowRight size={12} />
         <span className="text-blue-200">Succeed</span>
       </div>
 
-      <div className="inline-flex items-center gap-1.5 bg-white/10 backdrop-blur text-blue-100 text-[11px] font-semibold uppercase tracking-wider px-3 py-1.5 rounded-full mb-4">
-        <GraduationCap size={13} /> Built exclusively for SSC CGL
+      <div className="inline-flex items-center gap-1.5 bg-white/10 backdrop-blur text-blue-100 text-xs font-semibold uppercase tracking-wider px-3 py-1.5 rounded-full mb-5">
+        <GraduationCap size={14} /> Built exclusively for SSC CGL
       </div>
       <h1
-        className="text-3xl sm:text-4xl font-extrabold text-white leading-tight mb-3"
+        className="text-4xl sm:text-5xl font-extrabold text-white leading-tight mb-4"
         style={{ textShadow: "0 0 40px rgba(96,165,250,0.35)" }}
       >
         Not Just Mock Tests.<br />
         <span className="bg-gradient-to-r from-sky-300 via-blue-300 to-indigo-300 bg-clip-text text-transparent">AI-Powered</span> Exam Prep.
       </h1>
-      <p className="text-sm text-blue-200/80 max-w-md mb-6">
+      <p className="text-base text-blue-200/80 max-w-md mb-7">
         Real exam-pattern mocks, topic-wise practice mapped to the actual syllabus, and deep performance
         analysis after every attempt — all in one place.
       </p>
@@ -6331,12 +6331,12 @@ function SSCSyllabusShowcase() {
         {features.map((f) => (
           <div
             key={f.label}
-            className="flex flex-col items-center text-center gap-2 bg-blue-950/40 backdrop-blur border border-blue-400/20 rounded-xl px-2 py-3.5 hover:border-blue-300/60 hover:shadow-[0_0_20px_rgba(59,130,246,0.35)] transition-all duration-300"
+            className="flex flex-col items-center text-center gap-2 bg-blue-950/40 backdrop-blur border border-blue-400/20 rounded-xl px-2 py-4 hover:border-blue-300/60 hover:shadow-[0_0_20px_rgba(59,130,246,0.35)] transition-all duration-300"
           >
-            <div className="w-9 h-9 rounded-full bg-blue-500/10 border border-blue-400/30 flex items-center justify-center">
-              <f.icon size={16} className="text-blue-300" />
+            <div className="w-10 h-10 rounded-full bg-blue-500/10 border border-blue-400/30 flex items-center justify-center">
+              <f.icon size={18} className="text-blue-300" />
             </div>
-            <span className="text-[11px] text-blue-100/90 leading-tight">{f.label}</span>
+            <span className="text-xs text-blue-100/90 leading-tight">{f.label}</span>
           </div>
         ))}
       </div>
@@ -6476,30 +6476,30 @@ function StudentGate({ children }) {
         <div className="relative min-h-screen lg:h-full flex items-center justify-center p-6 py-8">
           <div className="relative w-full max-w-5xl grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-8 items-center">
             <SSCSyllabusShowcase />
-            <div className="order-1 lg:order-2 relative z-10 animate-fade-slide max-w-sm w-full mx-auto lg:mx-0 bg-blue-950/60 backdrop-blur-md rounded-2xl p-7 text-center shadow-2xl shadow-blue-950/70 border border-blue-400/25">
-              <div className="inline-flex items-center gap-1.5 bg-blue-500/15 text-blue-200 border border-blue-400/30 text-xs font-medium px-3 py-1.5 rounded-full mb-4">
-                <Sparkles size={13} /> The 100 Percentiler
+            <div className="order-1 lg:order-2 relative z-10 animate-fade-slide max-w-md w-full mx-auto lg:mx-0 bg-blue-950/60 backdrop-blur-md rounded-2xl p-8 text-center shadow-2xl shadow-blue-950/70 border border-blue-400/25">
+              <div className="inline-flex items-center gap-1.5 bg-blue-500/15 text-blue-200 border border-blue-400/30 text-xs font-medium px-3 py-1.5 rounded-full mb-5">
+                <Sparkles size={14} /> The 100 Percentiler
               </div>
-              <h1 className="text-lg font-semibold text-white mb-1.5">Welcome back</h1>
-              <p className="text-sm text-blue-200/80 mb-5">Sign in with Google to take mock tests and practice questions.</p>
+              <h1 className="text-2xl font-semibold text-white mb-2">Welcome back</h1>
+              <p className="text-base text-blue-200/80 mb-6">Sign in with Google to take mock tests and practice questions.</p>
               <button
                 onClick={() => signInWithGoogle()}
-                className="w-full flex items-center justify-center gap-2 bg-white border border-white/50 text-slate-700 text-sm font-medium rounded-lg py-2.5 hover:shadow-[0_0_20px_rgba(255,255,255,0.4)] hover:-translate-y-0.5 transition-all"
+                className="w-full flex items-center justify-center gap-2 bg-white border border-white/50 text-slate-700 text-base font-medium rounded-lg py-3 hover:shadow-[0_0_20px_rgba(255,255,255,0.4)] hover:-translate-y-0.5 transition-all"
               >
                 Continue with Google
               </button>
-              <div className="flex items-center justify-center gap-4 mt-5 pt-4 border-t border-blue-400/15">
-                <div className="flex flex-col items-center gap-1 text-blue-300/70">
-                  <Zap size={14} />
-                  <span className="text-[9px] leading-tight text-center">Fast<br />&amp; Secure</span>
+              <div className="flex items-center justify-center gap-5 mt-6 pt-5 border-t border-blue-400/15">
+                <div className="flex flex-col items-center gap-1.5 text-blue-300/70">
+                  <Zap size={17} />
+                  <span className="text-[11px] leading-tight text-center">Fast<br />&amp; Secure</span>
                 </div>
-                <div className="flex flex-col items-center gap-1 text-blue-300/70">
-                  <ShieldCheck size={14} />
-                  <span className="text-[9px] leading-tight text-center">Data Stays<br />Private</span>
+                <div className="flex flex-col items-center gap-1.5 text-blue-300/70">
+                  <ShieldCheck size={17} />
+                  <span className="text-[11px] leading-tight text-center">Data Stays<br />Private</span>
                 </div>
-                <div className="flex flex-col items-center gap-1 text-blue-300/70">
-                  <MousePointerClick size={14} />
-                  <span className="text-[9px] leading-tight text-center">One-Click<br />Access</span>
+                <div className="flex flex-col items-center gap-1.5 text-blue-300/70">
+                  <MousePointerClick size={17} />
+                  <span className="text-[11px] leading-tight text-center">One-Click<br />Access</span>
                 </div>
               </div>
             </div>
