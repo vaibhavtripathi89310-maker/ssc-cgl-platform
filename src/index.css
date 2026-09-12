@@ -118,6 +118,36 @@ body {
   }
 }
 
+/* Diagonal light sweep across the colored header banner on browse screens
+   (mock list, Practice Ground pickers) — gives that solid gradient band
+   some visible life instead of sitting completely static. */
+@keyframes bannerSheen {
+  0% { transform: translateX(-60%) skewX(-15deg); }
+  100% { transform: translateX(160%) skewX(-15deg); }
+}
+.banner-sheen {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.banner-sheen::before {
+  content: "";
+  position: absolute;
+  top: -20%;
+  left: 0;
+  width: 25%;
+  height: 140%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.16), transparent);
+  animation: bannerSheen 6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .banner-sheen::before {
+    animation: none;
+    display: none;
+  }
+}
+
 .geo-shape {
   transition: transform 0.3s ease, opacity 0.3s ease, filter 0.3s ease;
   cursor: pointer;

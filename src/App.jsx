@@ -5494,18 +5494,37 @@ function WeakTopicPracticeView({ topics, onExit }) {
   );
 }
 
-// Soft, slow-drifting blurred color blobs for light-background "browse and
-// pick something" screens (mock lists, Practice Ground pickers) — the
-// light-mode counterpart to the sign-in hero's dark geometric background,
-// deliberately much quieter since these are task screens people scan and
-// read, not a first-impression hero. Pure CSS (no JS/physics), so it costs
-// nothing to render.
+// Light-background counterpart to the sign-in hero's dark geometric
+// background: big saturated drifting color blobs plus a scattering of
+// floating outline shapes (same rings/dots/float-and-spin CSS classes as
+// GeometricSignInBackground, just recolored for a light backdrop). Pure CSS,
+// no JS/physics — this is a secondary browsing screen, not a first
+// impression, so the motion is real but doesn't need cursor interaction.
 function AmbientOrbBackground() {
+  const shapes = [
+    { top: "10%", left: "8%", size: 70, kind: "ring", color: "border-blue-400/40", anim: "geo-spin-slow" },
+    { top: "18%", right: "12%", size: 46, kind: "ring", color: "border-violet-400/40", anim: "geo-float-a" },
+    { bottom: "22%", left: "16%", size: 30, kind: "dot", color: "bg-emerald-400/30", anim: "geo-pulse" },
+    { bottom: "12%", right: "20%", size: 54, kind: "ring", color: "border-amber-400/40", anim: "geo-spin-slow-rev" },
+    { top: "45%", left: "45%", size: 22, kind: "dot", color: "bg-blue-400/30", anim: "geo-float-b" },
+    { top: "6%", right: "35%", size: 18, kind: "dot", color: "bg-violet-400/30", anim: "geo-pulse" },
+    { bottom: "6%", left: "48%", size: 38, kind: "ring", color: "border-emerald-400/40", anim: "geo-float-a" },
+  ];
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      <div className="geo-orb-light" style={{ top: "-6%", left: "4%", width: 320, height: 320, background: "rgba(96,165,250,0.35)" }} />
-      <div className="geo-orb-light" style={{ top: "28%", right: "-6%", width: 280, height: 280, background: "rgba(167,139,250,0.3)", animationDelay: "-8s" }} />
-      <div className="geo-orb-light" style={{ bottom: "-10%", left: "32%", width: 260, height: 260, background: "rgba(52,211,153,0.25)", animationDelay: "-16s" }} />
+      <div className="geo-orb-light" style={{ top: "-10%", left: "2%", width: 420, height: 420, background: "rgba(59,130,246,0.5)" }} />
+      <div className="geo-orb-light" style={{ top: "20%", right: "-10%", width: 380, height: 380, background: "rgba(139,92,246,0.45)", animationDelay: "-8s" }} />
+      <div className="geo-orb-light" style={{ bottom: "-15%", left: "22%", width: 360, height: 360, background: "rgba(16,185,129,0.4)", animationDelay: "-16s" }} />
+      <div className="geo-orb-light" style={{ bottom: "10%", right: "10%", width: 260, height: 260, background: "rgba(251,191,36,0.4)", animationDelay: "-4s" }} />
+      {shapes.map((s, i) => (
+        <div key={i} className={s.anim} style={{ position: "absolute", top: s.top, left: s.left, right: s.right, bottom: s.bottom, width: s.size, height: s.size }}>
+          {s.kind === "ring" ? (
+            <div className={`w-full h-full rounded-full border-2 ${s.color}`} />
+          ) : (
+            <div className={`w-full h-full rounded-full ${s.color}`} />
+          )}
+        </div>
+      ))}
     </div>
   );
 }
@@ -5531,6 +5550,7 @@ function PracticeGroundSectionPickerView({ exam, onPick, onBack }) {
       <AmbientOrbBackground />
       <div className={`relative overflow-hidden bg-gradient-to-br ${theme.gradient} text-white px-6 py-10 sm:py-14`}>
         <div className="absolute -right-16 -top-16 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="banner-sheen" />
         <div className="relative max-w-5xl mx-auto">
           <button onClick={onBack} className="text-sm text-white/80 hover:text-white mb-4 inline-flex items-center gap-1 transition-colors">
             ← Back
@@ -5607,6 +5627,7 @@ function PracticeGroundPickerView({ exam, section, onStart, onBack }) {
       <AmbientOrbBackground />
       <div className={`relative overflow-hidden bg-gradient-to-br ${theme.gradient} text-white px-6 py-10 sm:py-14`}>
         <div className="absolute -right-16 -top-16 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="banner-sheen" />
         <div className="relative max-w-5xl mx-auto">
           <button onClick={onBack} className="text-sm text-white/80 hover:text-white mb-4 inline-flex items-center gap-1 transition-colors">
             ← Back
@@ -6239,9 +6260,11 @@ function StudentApp() {
     const theme = EXAM_THEME[exam.key];
     const ExamIcon = theme.icon;
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50">
+      <div className="relative min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 overflow-hidden">
+        <AmbientOrbBackground />
         <div className={`relative overflow-hidden bg-gradient-to-br ${theme.gradient} text-white px-6 py-10 sm:py-14`}>
           <div className="absolute -right-16 -top-16 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="banner-sheen" />
           <div className="relative max-w-5xl mx-auto">
             <button onClick={backToExam} className="text-sm text-white/80 hover:text-white mb-4 inline-flex items-center gap-1 transition-colors">
               ← Back to exams
@@ -6335,9 +6358,11 @@ function StudentApp() {
     const exam = EXAMS[examFilter] || EXAMS[DEFAULT_EXAM];
     const theme = EXAM_THEME[exam.key];
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50">
+      <div className="relative min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 overflow-hidden">
+        <AmbientOrbBackground />
         <div className={`relative overflow-hidden bg-gradient-to-br ${theme.gradient} text-white px-6 py-10 sm:py-14`}>
           <div className="absolute -right-16 -top-16 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="banner-sheen" />
           <div className="relative max-w-5xl mx-auto">
             <button onClick={backToType} className="text-sm text-white/80 hover:text-white mb-4 inline-flex items-center gap-1 transition-colors">
               ← Back
@@ -6385,6 +6410,7 @@ function StudentApp() {
         <AmbientOrbBackground />
         <div className={`relative overflow-hidden bg-gradient-to-br ${theme.gradient} text-white px-6 py-10 sm:py-14`}>
           <div className="absolute -right-16 -top-16 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="banner-sheen" />
           <div className="relative max-w-5xl mx-auto">
             <button
               onClick={typeFilter === MOCK_TYPES.SECTIONAL ? backToSectionPicker : backToType}
