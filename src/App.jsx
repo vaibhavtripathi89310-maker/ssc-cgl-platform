@@ -352,10 +352,10 @@ const PRACTICE_DIFFICULTY_COLORS = {
 // (same section keys EXAMS already uses) — picked from a fixed list instead
 // of free-typed, so a topic name can never accidentally drift/mismatch
 // across separate uploads (and later, so an AI-analysis "practice this
-// topic" link has something reliable to match against). Only SSC CGL
-// Quant and General Awareness are filled in so far (per real syllabus
-// research, see project memory) — Reasoning and English fall back to
-// free-text entry in the UI until their own curated lists get built.
+// topic" link has something reliable to match against). All four SSC CGL
+// sections are filled in (per real syllabus research, see project memory).
+// GMAT/SNAP have no curated lists yet and fall back to free-text entry in
+// the UI until their own get built.
 const CURATED_PRACTICE_TOPICS = {
   ssc_cgl: {
     quant_aptitude: [
@@ -372,8 +372,20 @@ const CURATED_PRACTICE_TOPICS = {
       "Sports", "Important Days and Events", "International Organizations", "Government Schemes",
       "Current Affairs",
     ],
-    gi_reasoning: [],
-    english_comprehension: [],
+    gi_reasoning: [
+      "Analogy", "Classification", "Series (Number, Alphabet and Alphanumeric)", "Coding-Decoding",
+      "Blood Relations", "Direction Sense", "Ranking and Order", "Seating Arrangement", "Puzzle",
+      "Syllogism", "Venn Diagram", "Statement and Conclusion", "Statement and Assumption",
+      "Mathematical Operations", "Word Formation", "Missing Number and Matrix",
+      "Mirror and Water Images", "Paper Folding and Cutting", "Embedded Figures and Figure Counting",
+      "Dice and Cubes",
+    ],
+    english_comprehension: [
+      "Reading Comprehension", "Cloze Test", "Para Jumbles", "Error Spotting", "Sentence Improvement",
+      "Synonyms", "Antonyms", "One Word Substitution", "Idioms and Phrases", "Spelling Correction",
+      "Active and Passive Voice", "Direct and Indirect Speech", "Fill in the Blanks",
+      "Homonyms and Homophones", "Confusable Words",
+    ],
   },
 };
 const DIFFICULTY_COLORS = {
