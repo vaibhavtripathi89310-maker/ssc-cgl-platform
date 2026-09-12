@@ -6301,6 +6301,7 @@ function SSCSyllabusShowcase() {
       label: "General Intelligence & Reasoning",
       icon: Puzzle,
       accent: "text-violet-300 bg-violet-500/20 border-violet-400/30",
+      bar: "from-violet-400 to-violet-600",
       topics: [
         { icon: Shuffle, label: "Analogy & Series" },
         { icon: Link2, label: "Blood Relations" },
@@ -6312,6 +6313,7 @@ function SSCSyllabusShowcase() {
       label: "Quantitative Aptitude",
       icon: Calculator,
       accent: "text-sky-300 bg-sky-500/20 border-sky-400/30",
+      bar: "from-sky-400 to-sky-600",
       topics: [
         { icon: Percent, label: "Percentage & Ratios" },
         { icon: Triangle, label: "Geometry & Mensuration" },
@@ -6323,6 +6325,7 @@ function SSCSyllabusShowcase() {
       label: "English Comprehension",
       icon: BookOpen,
       accent: "text-emerald-300 bg-emerald-500/20 border-emerald-400/30",
+      bar: "from-emerald-400 to-emerald-600",
       topics: [
         { icon: MessageSquare, label: "Reading Comprehension" },
         { icon: SpellCheck, label: "Grammar & Error Spotting" },
@@ -6333,6 +6336,7 @@ function SSCSyllabusShowcase() {
       label: "General Awareness",
       icon: Landmark,
       accent: "text-amber-300 bg-amber-500/20 border-amber-400/30",
+      bar: "from-amber-400 to-amber-600",
       topics: [
         { icon: Globe, label: "History & Geography" },
         { icon: Atom, label: "Science" },
@@ -6368,8 +6372,13 @@ function SSCSyllabusShowcase() {
         </p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {features.map((f) => (
-            <div key={f.label} className="flex flex-col items-center text-center gap-2 bg-white/5 border border-white/10 rounded-xl px-2 py-3">
-              <f.icon size={17} className="text-blue-300" />
+            <div
+              key={f.label}
+              className="flex flex-col items-center text-center gap-2 bg-blue-950/40 backdrop-blur border border-blue-400/20 rounded-xl px-2 py-3.5 hover:border-blue-300/60 hover:shadow-[0_0_20px_rgba(59,130,246,0.35)] transition-all duration-300"
+            >
+              <div className="w-9 h-9 rounded-full bg-blue-500/10 border border-blue-400/30 flex items-center justify-center">
+                <f.icon size={16} className="text-blue-300" />
+              </div>
               <span className="text-[11px] text-blue-100/90 leading-tight">{f.label}</span>
             </div>
           ))}
@@ -6379,8 +6388,9 @@ function SSCSyllabusShowcase() {
         {sections.map((s) => (
           <div
             key={s.label}
-            className="group bg-white/5 backdrop-blur border border-white/10 rounded-2xl p-4 hover:bg-white/10 hover:-translate-y-1 transition-all duration-300"
+            className="group relative bg-blue-950/40 backdrop-blur border border-blue-400/20 rounded-2xl p-4 overflow-hidden hover:border-blue-300/50 hover:-translate-y-1 hover:shadow-[0_0_25px_rgba(59,130,246,0.3)] transition-all duration-300"
           >
+            <div className={`absolute inset-y-0 left-0 w-1 bg-gradient-to-b ${s.bar}`} />
             <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-3 border ${s.accent}`}>
               <s.icon size={17} />
             </div>
@@ -6522,25 +6532,25 @@ function StudentGate({ children }) {
     return (
       <div className="geo-bg-gradient relative min-h-screen overflow-hidden">
         <GeometricSignInBackground />
+        <img
+          src={heroCharacter}
+          alt=""
+          aria-hidden="true"
+          className="hidden lg:block absolute right-[3%] bottom-0 h-[95vh] object-contain object-bottom pointer-events-none select-none"
+          style={{ filter: "drop-shadow(0 0 60px rgba(56,130,246,0.5))" }}
+        />
         <div className="relative min-h-screen flex items-center justify-center p-6 py-12">
           <div className="relative w-full max-w-5xl grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-10 items-center">
-            <img
-              src={heroCharacter}
-              alt=""
-              aria-hidden="true"
-              className="hidden lg:block absolute right-0 top-1/2 -translate-y-1/2 h-[125%] max-h-[820px] object-contain object-bottom pointer-events-none select-none"
-              style={{ filter: "drop-shadow(0 0 55px rgba(56,130,246,0.45))" }}
-            />
             <SSCSyllabusShowcase />
-            <div className="order-1 lg:order-2 relative z-10 animate-fade-slide max-w-sm w-full mx-auto lg:mx-0 bg-white/95 backdrop-blur-sm rounded-2xl p-8 text-center shadow-2xl shadow-blue-950/50 border border-white/20">
-              <div className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 text-xs font-medium px-3 py-1.5 rounded-full mb-5">
+            <div className="order-1 lg:order-2 relative z-10 animate-fade-slide max-w-sm w-full mx-auto lg:mx-0 bg-blue-950/60 backdrop-blur-md rounded-2xl p-8 text-center shadow-2xl shadow-blue-950/70 border border-blue-400/25">
+              <div className="inline-flex items-center gap-1.5 bg-blue-500/15 text-blue-200 border border-blue-400/30 text-xs font-medium px-3 py-1.5 rounded-full mb-5">
                 <Sparkles size={13} /> The 100 Percentiler
               </div>
-              <h1 className="text-lg font-semibold text-slate-800 mb-1.5">Sign in to continue</h1>
-              <p className="text-sm text-slate-500 mb-6">Sign in with Google to take mock tests and practice questions.</p>
+              <h1 className="text-lg font-semibold text-white mb-1.5">Sign in to continue</h1>
+              <p className="text-sm text-blue-200/80 mb-6">Sign in with Google to take mock tests and practice questions.</p>
               <button
                 onClick={() => signInWithGoogle()}
-                className="w-full flex items-center justify-center gap-2 border border-slate-200 text-slate-700 text-sm font-medium rounded-lg py-2.5 hover:bg-slate-50 hover:shadow-md hover:-translate-y-0.5 transition-all"
+                className="w-full flex items-center justify-center gap-2 bg-white border border-white/50 text-slate-700 text-sm font-medium rounded-lg py-2.5 hover:shadow-[0_0_20px_rgba(255,255,255,0.4)] hover:-translate-y-0.5 transition-all"
               >
                 Continue with Google
               </button>
