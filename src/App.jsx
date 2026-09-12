@@ -3455,17 +3455,19 @@ function PracticeBankView() {
     setSelectedTopic(topicOptions?.[0] || "");
   }, [sectionKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // The topic picked above (for tagging newly-pasted questions) and the
-  // list below it are otherwise unrelated — without this, picking "Medieval
-  // Indian History" up top while the list still shows "Ancient Indian
-  // History" first (just alphabetical order) reads as if the wrong topic's
-  // questions are being shown, when really the list was never filtered to
-  // match the selection at all. Keep the list narrowed to whatever topic is
-  // currently selected for upload; admins can still clear/retype the search
-  // box below to browse a different topic.
-  useEffect(() => {
-    setFilterTopic(selectedTopic);
-  }, [selectedTopic]);
+  // Deliberately picking a topic up top (to tag newly-pasted questions)
+  // also narrows the list below to that same topic — without this, picking
+  // "Medieval Indian History" while the list still showed everything,
+  // starting with "Ancient Indian History" (just alphabetical order), read
+  // as if the wrong topic's questions were being served. This only fires
+  // from an actual admin click/keystroke below, not from the automatic
+  // reset-to-first-topic above (switching sections would otherwise blank
+  // the list to whatever topic happens to be first, even with nothing
+  // uploaded for it yet, instead of still showing everything by default).
+  function pickTopic(value) {
+    setSelectedTopic(value);
+    setFilterTopic(value);
+  }
 
   const refresh = useCallback(async () => {
     setLoaded(false);
@@ -3644,7 +3646,7 @@ function PracticeBankView() {
           {topicOptions ? (
             <select
               value={selectedTopic}
-              onChange={(e) => setSelectedTopic(e.target.value)}
+              onChange={(e) => pickTopic(e.target.value)}
               className="w-full sm:w-80 text-sm border border-slate-200 rounded-md px-3 py-1.5"
             >
               {topicOptions.map((t) => (
@@ -3655,7 +3657,7 @@ function PracticeBankView() {
             <>
               <input
                 value={selectedTopic}
-                onChange={(e) => setSelectedTopic(e.target.value)}
+                onChange={(e) => pickTopic(e.target.value)}
                 placeholder="e.g. Verbal Reasoning"
                 className="w-full sm:w-80 text-sm border border-slate-200 rounded-md px-3 py-1.5"
               />
