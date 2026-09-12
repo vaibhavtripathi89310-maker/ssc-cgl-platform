@@ -3455,6 +3455,18 @@ function PracticeBankView() {
     setSelectedTopic(topicOptions?.[0] || "");
   }, [sectionKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // The topic picked above (for tagging newly-pasted questions) and the
+  // list below it are otherwise unrelated — without this, picking "Medieval
+  // Indian History" up top while the list still shows "Ancient Indian
+  // History" first (just alphabetical order) reads as if the wrong topic's
+  // questions are being shown, when really the list was never filtered to
+  // match the selection at all. Keep the list narrowed to whatever topic is
+  // currently selected for upload; admins can still clear/retype the search
+  // box below to browse a different topic.
+  useEffect(() => {
+    setFilterTopic(selectedTopic);
+  }, [selectedTopic]);
+
   const refresh = useCallback(async () => {
     setLoaded(false);
     setLoadError(false);
