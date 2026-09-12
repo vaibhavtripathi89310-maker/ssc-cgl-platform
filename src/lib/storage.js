@@ -223,11 +223,11 @@ export async function loadAttemptById(id) {
 export async function loadMockScores(mockId) {
   const { data, error } = await supabase
     .from("attempts")
-    .select("id, score")
+    .select("id, score, user_id")
     .eq("mock_id", mockId)
     .order("score", { ascending: false });
   if (error) throw error;
-  return data || [];
+  return (data || []).map((r) => ({ id: r.id, score: r.score, userId: r.user_id }));
 }
 
 // Admin analytics — unique devices / total attempts / per-mock breakdown,
@@ -533,4 +533,53 @@ export async function loadAllStudentProfiles() {
   const { data, error } = await supabase.from("student_profiles").select("*").order("created_at", { ascending: false });
   if (error) throw error;
   return (data || []).map((r) => ({ id: r.id, email: r.email, phoneNumber: r.phone_number, createdAt: r.created_at }));
+}
+
+// ============================================================================
+// USERNAMES — deliberately a separate table from student_profiles, not just
+// another column on it. The leaderboard needs every signed-in student to be
+// able to read OTHER students' display names, but student_profiles (email,
+// phone) must never be readable by anyone but its owner + admin. Splitting
+// the public-facing name into its own table with its own "anyone signed in
+// can read" policy means that broader read access can never accidentally
+// expose email/phone through the same door.
+// ============================================================================
+export async function loadUsername(userId) {
+  const { data, error } = await supabase.from("usernames").select("username").eq("id", userId).maybeSingle();
+  if (error) throw error;
+  return data?.username || null;
+}
+
+// Idempotent — defaults to the part of the email before "@" the first time
+// this runs for a student, and never overwrites a username they've already
+// chosen for themselves.
+export async function ensureUsername(userId, email) {
+  const existing = await loadUsername(userId);
+  if (existing) return existing;
+  const fallback = (email || "student").split("@")[0];
+  const { error } = await supabase.from("usernames").upsert({ id: userId, username: fallback });
+  if (error) throw error;
+  return fallback;
+}
+
+export async function saveUsername(userId, username) {
+  const { error } = await supabase
+    .from("usernames")
+    .upsert({ id: userId, username, updated_at: new Date().toISOString() });
+  if (error) throw error;
+}
+
+// Batch lookup for the leaderboard — one entry per user_id that has a
+// username; an id with no row (an anonymous, pre-account attempt) just
+// won't have a key, and callers fall back to showing no name for that row.
+export async function loadUsernamesByIds(userIds) {
+  const ids = [...new Set(userIds.filter(Boolean))];
+  if (ids.length === 0) return {};
+  const { data, error } = await supabase.from("usernames").select("id, username").in("id", ids);
+  if (error) throw error;
+  const map = {};
+  (data || []).forEach((r) => {
+    map[r.id] = r.username;
+  });
+  return map;
 }

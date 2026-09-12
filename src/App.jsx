@@ -21,6 +21,7 @@ import {
   loadPracticeGroundEnabled, setPracticeGroundEnabled,
   loadDistinctMockIdsTakenByUser, loadStudentProfile, ensureStudentProfile,
   saveStudentPhoneNumber, loadAllStudentProfiles, checkIsAdmin,
+  ensureUsername, saveUsername, loadUsernamesByIds,
 } from "./lib/storage";
 import { signIn, signOut, signInWithGoogle, getSession, onAuthStateChange } from "./lib/auth";
 import { analyzeAttempt } from "./lib/aiAnalysis";
@@ -2275,6 +2276,67 @@ function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight) {
   ctx.fillText(line.trim(), x, curY);
 }
 
+// The leaderboard's "You" row — lets a student rename themselves inline
+// instead of being stuck with the default (their email's local-part, set
+// once at sign-up by ensureUsername). Other students' rows just show
+// whatever name loadUsernamesByIds resolved, with no edit control.
+function EditableUsername({ value, onSave }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value || "");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setDraft(value || "");
+  }, [value]);
+
+  // No StudentSessionContext at all (e.g. the admin's own preview/run of a
+  // mock) — keep the old plain "· You" label rather than an edit control
+  // that has nothing real to save to.
+  if (!onSave) return <span>· {value || "You"}</span>;
+
+  async function handleSave() {
+    const trimmed = draft.trim();
+    if (!trimmed || trimmed === value) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSave(trimmed);
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!editing) {
+    return (
+      <span className="inline-flex items-center gap-1">
+        · {value}
+        <button onClick={() => setEditing(true)} className="text-blue-400 hover:text-blue-600" title="Change your leaderboard name">
+          <Pencil size={11} />
+        </button>
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1">
+      <input
+        autoFocus
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && handleSave()}
+        maxLength={24}
+        className="text-xs border border-blue-300 rounded px-1.5 py-0.5 w-24 font-normal"
+      />
+      <button onClick={handleSave} disabled={saving} className="text-blue-600 font-medium disabled:opacity-50">
+        {saving ? "..." : "Save"}
+      </button>
+    </span>
+  );
+}
+
 // ============================================================================
 // RUN MOCK — an actual timed, section-locked attempt, using this mock's real
 // questions. Distinct from PreviewView: no answers shown, real countdown per
@@ -2540,6 +2602,7 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
   // unreachable, the results screen still works, just without a percentile.
   const [percentile, setPercentile] = useState(null);
   const [leaderboard, setLeaderboard] = useState([]);
+  const [leaderboardNames, setLeaderboardNames] = useState({});
   const [myAttemptId, setMyAttemptId] = useState(null);
   const [cutoffs, setCutoffs] = useState([]);
   const [challengeClaim, setChallengeClaim] = useState(null); // 'claimed' | 'taken' | null (only relevant when challengeId prop is set)
@@ -2566,10 +2629,14 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
           answers,
           timeSpent,
         });
-        const rows = await loadMockScores(mock.id); // [{id, score}], best first
+        const rows = await loadMockScores(mock.id); // [{id, score, userId}], best first
         const better = rows.filter((r) => r.score < score).length;
         setPercentile(rows.length > 1 ? Math.round((better / rows.length) * 100) : null);
-        setLeaderboard(rows.slice(0, 5));
+        const topRows = rows.slice(0, 5);
+        setLeaderboard(topRows);
+        loadUsernamesByIds(topRows.map((r) => r.userId))
+          .then(setLeaderboardNames)
+          .catch(() => {}); // Non-critical — leaderboard still shows ranks/scores without names.
         studentSession?.refreshAttemptedMockIds?.();
         if (challengeId) {
           const claimed = await claimOpponentSlot(challengeId, attemptId);
@@ -2841,19 +2908,28 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
                     <Trophy size={15} className="text-amber-500" /> Top scores for this mock
                   </h3>
                   <div className="space-y-1.5">
-                    {leaderboard.map((row, i) => (
-                      <div
-                        key={row.id}
-                        className={`flex items-center justify-between text-xs rounded-md px-3 py-2 ${
-                          row.id === myAttemptId ? "bg-blue-50 border border-blue-200" : "bg-slate-50"
-                        }`}
-                      >
-                        <span className={row.id === myAttemptId ? "font-semibold text-blue-800" : "text-slate-600"}>
-                          #{i + 1}{row.id === myAttemptId ? " · You" : ""}
-                        </span>
-                        <span className="font-medium text-slate-800">{row.score}</span>
-                      </div>
-                    ))}
+                    {leaderboard.map((row, i) => {
+                      const isMe = row.id === myAttemptId;
+                      const name = leaderboardNames[row.userId];
+                      return (
+                        <div
+                          key={row.id}
+                          className={`flex items-center justify-between text-xs rounded-md px-3 py-2 ${
+                            isMe ? "bg-blue-50 border border-blue-200" : "bg-slate-50"
+                          }`}
+                        >
+                          <span className={`flex items-center gap-1 ${isMe ? "font-semibold text-blue-800" : "text-slate-600"}`}>
+                            #{i + 1}
+                            {isMe ? (
+                              <EditableUsername value={studentSession?.username} onSave={studentSession?.saveMyUsername} />
+                            ) : (
+                              name && <span>· {name}</span>
+                            )}
+                          </span>
+                          <span className="font-medium text-slate-800">{row.score}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -6892,6 +6968,7 @@ function StudentGate({ children }) {
   const [profile, setProfile] = useState(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [attemptedMockIds, setAttemptedMockIds] = useState(new Set());
+  const [username, setUsername] = useState(null);
 
   useEffect(() => {
     getSession().then(setSession);
@@ -6905,12 +6982,18 @@ function StudentGate({ children }) {
       setProfile(p);
       setProfileLoaded(true);
       setAttemptedMockIds(new Set(await loadDistinctMockIdsTakenByUser(session.user.id)));
+      setUsername(await ensureUsername(session.user.id, session.user.email));
     })();
   }, [session]);
 
   async function saveMyPhoneNumber(phone) {
     await saveStudentPhoneNumber(session.user.id, phone);
     setProfile((p) => ({ ...p, phoneNumber: phone }));
+  }
+
+  async function saveMyUsername(name) {
+    await saveUsername(session.user.id, name);
+    setUsername(name);
   }
 
   async function refreshAttemptedMockIds() {
@@ -6983,6 +7066,8 @@ function StudentGate({ children }) {
         attemptedMockIds,
         refreshAttemptedMockIds,
         saveMyPhoneNumber,
+        username,
+        saveMyUsername,
       }}
     >
       {children}
