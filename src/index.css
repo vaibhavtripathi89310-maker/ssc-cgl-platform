@@ -63,6 +63,15 @@ body {
   50% { background-position: 100% 50%; }
   100% { background-position: 0% 50%; }
 }
+@keyframes orbDrift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(40px, -30px) scale(1.08); }
+  66% { transform: translate(-30px, 25px) scale(0.95); }
+}
+@keyframes starTwinkle {
+  0%, 100% { opacity: 0.15; transform: scale(0.8); }
+  50% { opacity: 0.95; transform: scale(1.15); }
+}
 
 .geo-bg-gradient {
   background: linear-gradient(120deg, #172554, #1e3a8a, #312e81, #1e1b4b, #1e3a8a);
@@ -70,12 +79,25 @@ body {
   animation: gradientDrift 18s ease-in-out infinite;
 }
 
-.geo-parallax {
-  transform: translate(
-    calc(var(--mx, 0) * var(--depth, 1) * 1px),
-    calc(var(--my, 0) * var(--depth, 1) * 1px)
-  );
-  transition: transform 0.15s ease-out;
+/* Large soft blurred blobs drifting slowly behind everything else — pure
+   atmosphere, no interaction, cheap to render since they never move via JS. */
+.geo-orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(60px);
+  mix-blend-mode: screen;
+  animation: orbDrift 22s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Tiny twinkling dots scattered across the sign-in background for depth —
+   fully decorative, positioned once and never touched by the physics loop. */
+.geo-star {
+  position: absolute;
+  border-radius: 9999px;
+  background: #bfdbfe;
+  animation: starTwinkle 3s ease-in-out infinite;
+  pointer-events: none;
 }
 
 .geo-shape {
@@ -95,10 +117,10 @@ body {
 .geo-pulse { animation: geoPulse 5s ease-in-out infinite; }
 
 @media (prefers-reduced-motion: reduce) {
-  .geo-bg-gradient, .geo-float-a, .geo-float-b, .geo-spin-slow, .geo-spin-slow-rev, .geo-pulse {
+  .geo-bg-gradient, .geo-float-a, .geo-float-b, .geo-spin-slow, .geo-spin-slow-rev, .geo-pulse,
+  .geo-orb, .geo-star {
     animation: none;
   }
-  .geo-parallax { transform: none; }
 }
 
 /* PDF export (results screen "Download PDF") is just the browser's own

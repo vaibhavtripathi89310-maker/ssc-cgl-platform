@@ -6344,82 +6344,269 @@ function SSCSyllabusShowcase() {
   );
 }
 
-function GeometricSignInBackground() {
-  const containerRef = useRef(null);
+// Shape defs — visual size/kind/ambient-flavor only. Position and velocity
+// are physics state (see the effect below) and deliberately never touch
+// React state: they're mutated in a ref and written straight to each node's
+// `transform` every animation frame, the same "skip the render cycle for
+// 60fps motion" trick the old cursor-parallax version used.
+const GEO_SHAPE_DEFS = [
+  { size: 90, kind: "ring", anim: "geo-spin-slow" },
+  { size: 60, kind: "triangle", anim: "geo-spin-slow" },
+  { size: 70, kind: "hexagon", anim: "geo-spin-slow-rev" },
+  { size: 46, kind: "diamond", anim: "geo-pulse" },
+  { size: 22, kind: "dot", anim: "geo-pulse" },
+  { size: 18, kind: "dot", anim: "geo-pulse" },
+  { size: 14, kind: "dot", anim: "geo-pulse" },
+  { size: 50, kind: "ring", anim: "geo-spin-slow-rev" },
+  { size: 40, kind: "triangle", anim: "geo-spin-slow" },
+  { size: 110, kind: "ring", anim: "geo-pulse" },
+  { size: 34, kind: "hexagon", anim: "geo-spin-slow-rev" },
+  { size: 26, kind: "diamond", anim: "geo-pulse" },
+  { size: 16, kind: "dot", anim: "geo-pulse" },
+  { size: 20, kind: "dot", anim: "geo-pulse" },
+  { size: 56, kind: "triangle", anim: "geo-spin-slow-rev" },
+  { size: 30, kind: "ring", anim: "geo-spin-slow" },
+];
 
-  function handleMouseMove(e) {
-    const el = containerRef.current;
-    if (!el) return;
-    const mx = (e.clientX / window.innerWidth - 0.5) * 40;
-    const my = (e.clientY / window.innerHeight - 0.5) * 40;
-    el.style.setProperty("--mx", mx.toFixed(2));
-    el.style.setProperty("--my", my.toFixed(2));
+function renderGeoShape(kind) {
+  if (kind === "ring") {
+    return <div className="geo-shape w-full h-full rounded-full border-2 border-blue-300/40" />;
   }
-
-  const shapes = [
-    { style: { top: "8%", left: "10%", width: 90, height: 90 }, depth: 0.5, anim: "geo-float-a", kind: "ring" },
-    { style: { top: "16%", right: "14%", width: 60, height: 60 }, depth: 0.9, anim: "geo-spin-slow", kind: "triangle" },
-    { style: { bottom: "14%", left: "16%", width: 70, height: 70 }, depth: 0.7, anim: "geo-spin-slow-rev", kind: "hexagon" },
-    { style: { bottom: "10%", right: "10%", width: 46, height: 46 }, depth: 1.2, anim: "geo-float-b", kind: "diamond" },
-    { style: { top: "42%", left: "6%", width: 22, height: 22 }, depth: 1.4, anim: "geo-pulse", kind: "dot" },
-    { style: { top: "60%", right: "8%", width: 18, height: 18 }, depth: 1.3, anim: "geo-pulse", kind: "dot" },
-    { style: { top: "8%", left: "45%", width: 14, height: 14 }, depth: 1.5, anim: "geo-float-a", kind: "dot" },
-    { style: { bottom: "30%", right: "30%", width: 50, height: 50 }, depth: 0.4, anim: "geo-float-b", kind: "ring" },
-    { style: { top: "70%", left: "38%", width: 40, height: 40 }, depth: 0.8, anim: "geo-spin-slow", kind: "triangle" },
-    { style: { top: "30%", right: "38%", width: 130, height: 130 }, depth: 0.2, anim: "geo-pulse", kind: "ring" },
-  ];
-
-  function renderShape(kind) {
-    if (kind === "ring") {
-      return <div className="geo-shape w-full h-full rounded-full border-2 border-blue-300/40" />;
-    }
-    if (kind === "dot") {
-      return <div className="geo-shape w-full h-full rounded-full bg-blue-200/50" />;
-    }
-    if (kind === "diamond") {
-      return <div className="geo-shape w-full h-full border-2 border-indigo-200/40" style={{ transform: "rotate(45deg)" }} />;
-    }
-    if (kind === "triangle") {
-      // Border + clip-path clips the whole box (border included), which
-      // only leaves fragments of the outline visible rather than a clean
-      // triangle — an SVG stroke with no fill draws the actual outline.
-      return (
-        <svg viewBox="0 0 100 100" className="geo-shape w-full h-full">
-          <polygon points="50,4 4,96 96,96" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-sky-200/40" />
-        </svg>
-      );
-    }
-    if (kind === "hexagon") {
-      return (
-        <svg viewBox="0 0 100 100" className="geo-shape w-full h-full">
-          <polygon
-            points="25,4 75,4 96,50 75,96 25,96 4,50"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            className="text-indigo-200/40"
-          />
-        </svg>
-      );
-    }
-    return null;
+  if (kind === "dot") {
+    return <div className="geo-shape w-full h-full rounded-full bg-blue-200/50" />;
   }
+  if (kind === "diamond") {
+    return <div className="geo-shape w-full h-full border-2 border-indigo-200/40" style={{ transform: "rotate(45deg)" }} />;
+  }
+  if (kind === "triangle") {
+    // Border + clip-path clips the whole box (border included), which
+    // only leaves fragments of the outline visible rather than a clean
+    // triangle — an SVG stroke with no fill draws the actual outline.
+    return (
+      <svg viewBox="0 0 100 100" className="geo-shape w-full h-full">
+        <polygon points="50,4 4,96 96,96" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-sky-200/40" />
+      </svg>
+    );
+  }
+  if (kind === "hexagon") {
+    return (
+      <svg viewBox="0 0 100 100" className="geo-shape w-full h-full">
+        <polygon
+          points="25,4 75,4 96,50 75,96 25,96 4,50"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          className="text-indigo-200/40"
+        />
+      </svg>
+    );
+  }
+  return null;
+}
 
+// A handful of large, softly blurred color blobs that drift slowly in the
+// background for atmosphere — pure CSS, no JS, never touched by the physics
+// loop below.
+const GEO_ORBS = [
+  { top: "5%", left: "8%", size: 260, color: "rgba(56,130,246,0.28)", delay: "0s" },
+  { top: "55%", right: "6%", size: 320, color: "rgba(99,102,241,0.25)", delay: "-7s" },
+  { bottom: "8%", left: "30%", size: 220, color: "rgba(56,189,248,0.22)", delay: "-14s" },
+];
+
+function GeoStarField() {
+  // Positions are random per mount but never move — only opacity/scale
+  // twinkle via CSS, so this needs no physics and costs nothing per frame.
+  const stars = useRef(
+    Array.from({ length: 35 }, () => ({
+      top: `${Math.random() * 100}%`,
+      left: `${Math.random() * 100}%`,
+      size: 1 + Math.random() * 2,
+      duration: 2 + Math.random() * 3,
+      delay: -Math.random() * 5,
+    }))
+  ).current;
   return (
-    <div
-      ref={containerRef}
-      onMouseMove={handleMouseMove}
-      className="absolute inset-0 overflow-hidden pointer-events-none"
-      style={{ "--mx": 0, "--my": 0 }}
-    >
-      {shapes.map((s, i) => (
+    <>
+      {stars.map((s, i) => (
         <div
           key={i}
-          className="geo-parallax absolute pointer-events-auto"
-          style={{ ...s.style, "--depth": s.depth }}
+          className="geo-star"
+          style={{
+            top: s.top,
+            left: s.left,
+            width: s.size,
+            height: s.size,
+            animationDuration: `${s.duration}s`,
+            animationDelay: `${s.delay}s`,
+          }}
+        />
+      ))}
+    </>
+  );
+}
+
+// The sign-in screen's "hyper-interactive" backdrop: a field of geometric
+// outline shapes that drift under real 2D physics — they carry momentum,
+// bounce elastically off the container walls and off each other (equal-mass
+// elastic collision: swap the velocity component along the line connecting
+// the two centers, then push them apart so they don't overlap), and get
+// shoved away from the cursor like a repulsion field. All of this runs in a
+// single requestAnimationFrame loop that writes directly to each shape's
+// `style.transform` — never through React state — so 60fps motion never
+// triggers a re-render.
+function GeometricSignInBackground() {
+  const containerRef = useRef(null);
+  const shapeElsRef = useRef([]);
+  const physicsRef = useRef([]);
+  const cursorRef = useRef({ x: -9999, y: -9999 });
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const rect = container.getBoundingClientRect();
+    let width = rect.width || 1;
+    let height = rect.height || 1;
+
+    physicsRef.current = GEO_SHAPE_DEFS.map((d) => {
+      const r = d.size / 2;
+      return {
+        x: r + Math.random() * Math.max(width - d.size, 1),
+        y: r + Math.random() * Math.max(height - d.size, 1),
+        vx: (Math.random() - 0.5) * 50,
+        vy: (Math.random() - 0.5) * 50,
+        r,
+      };
+    });
+
+    function paint() {
+      physicsRef.current.forEach((s, i) => {
+        const el = shapeElsRef.current[i];
+        if (el) el.style.transform = `translate3d(${(s.x - s.r).toFixed(1)}px, ${(s.y - s.r).toFixed(1)}px, 0)`;
+      });
+    }
+    paint();
+
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return; // Static field, no motion — respected up front, no rAF loop at all.
+    }
+
+    function handleMouseMove(e) {
+      const r = container.getBoundingClientRect();
+      cursorRef.current = { x: e.clientX - r.left, y: e.clientY - r.top };
+    }
+    function handleMouseLeave() {
+      cursorRef.current = { x: -9999, y: -9999 };
+    }
+    function handleResize() {
+      const r = container.getBoundingClientRect();
+      width = r.width || 1;
+      height = r.height || 1;
+    }
+    container.addEventListener("mousemove", handleMouseMove);
+    container.addEventListener("mouseleave", handleMouseLeave);
+    window.addEventListener("resize", handleResize);
+
+    let last = performance.now();
+    let rafId;
+
+    function tick(now) {
+      const dt = Math.min((now - last) / 1000, 0.05); // clamp so a stalled tab can't fling shapes
+      last = now;
+      const shapes = physicsRef.current;
+      const cursor = cursorRef.current;
+      const REPEL_RADIUS = 150;
+      const MIN_SPEED = 10;
+
+      for (const s of shapes) {
+        const dxCursor = s.x - cursor.x;
+        const dyCursor = s.y - cursor.y;
+        const distCursor = Math.hypot(dxCursor, dyCursor);
+        if (distCursor < REPEL_RADIUS) {
+          const force = (1 - distCursor / REPEL_RADIUS) * 1100;
+          const nx = distCursor === 0 ? 1 : dxCursor / distCursor;
+          const ny = distCursor === 0 ? 0 : dyCursor / distCursor;
+          s.vx += nx * force * dt;
+          s.vy += ny * force * dt;
+        }
+
+        s.x += s.vx * dt;
+        s.y += s.vy * dt;
+
+        // Elastic wall bounce, clamped back inside so high speed can't tunnel through.
+        if (s.x - s.r < 0) { s.x = s.r; s.vx = Math.abs(s.vx); }
+        if (s.x + s.r > width) { s.x = width - s.r; s.vx = -Math.abs(s.vx); }
+        if (s.y - s.r < 0) { s.y = s.r; s.vy = Math.abs(s.vy); }
+        if (s.y + s.r > height) { s.y = height - s.r; s.vy = -Math.abs(s.vy); }
+
+        // Light drag so a cursor shove settles instead of building forever.
+        s.vx *= 0.997;
+        s.vy *= 0.997;
+
+        const speed = Math.hypot(s.vx, s.vy);
+        if (speed < MIN_SPEED) {
+          const boost = MIN_SPEED / (speed || 1);
+          s.vx *= boost;
+          s.vy *= boost;
+        }
+      }
+
+      // Pairwise elastic collisions — equal-mass swap of the normal velocity
+      // component, then separate any overlap along that same normal.
+      for (let i = 0; i < shapes.length; i++) {
+        for (let j = i + 1; j < shapes.length; j++) {
+          const a = shapes[i], b = shapes[j];
+          const dx = b.x - a.x, dy = b.y - a.y;
+          const dist = Math.hypot(dx, dy) || 0.0001;
+          const minDist = a.r + b.r;
+          if (dist < minDist) {
+            const nx = dx / dist, ny = dy / dist;
+            const relVelAlongNormal = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny;
+            if (relVelAlongNormal > 0) {
+              a.vx -= relVelAlongNormal * nx;
+              a.vy -= relVelAlongNormal * ny;
+              b.vx += relVelAlongNormal * nx;
+              b.vy += relVelAlongNormal * ny;
+            }
+            const overlap = (minDist - dist) / 2;
+            a.x -= nx * overlap; a.y -= ny * overlap;
+            b.x += nx * overlap; b.y += ny * overlap;
+          }
+        }
+      }
+
+      paint();
+      rafId = requestAnimationFrame(tick);
+    }
+    rafId = requestAnimationFrame(tick);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      container.removeEventListener("mousemove", handleMouseMove);
+      container.removeEventListener("mouseleave", handleMouseLeave);
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
+
+  return (
+    <div ref={containerRef} className="absolute inset-0 overflow-hidden pointer-events-none">
+      {GEO_ORBS.map((o, i) => (
+        <div
+          key={i}
+          className="geo-orb"
+          style={{ top: o.top, left: o.left, right: o.right, bottom: o.bottom, width: o.size, height: o.size, background: o.color, animationDelay: o.delay }}
+        />
+      ))}
+      <GeoStarField />
+      {GEO_SHAPE_DEFS.map((d, i) => (
+        <div
+          key={i}
+          ref={(el) => (shapeElsRef.current[i] = el)}
+          className="absolute top-0 left-0 pointer-events-auto will-change-transform"
+          style={{ width: d.size, height: d.size }}
         >
-          <div className={s.anim} style={{ width: "100%", height: "100%" }}>
-            {renderShape(s.kind)}
+          <div className={d.anim} style={{ width: "100%", height: "100%" }}>
+            {renderGeoShape(d.kind)}
           </div>
         </div>
       ))}
