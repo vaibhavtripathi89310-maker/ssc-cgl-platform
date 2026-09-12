@@ -3244,6 +3244,7 @@ function StudentLeadsView() {
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [query, setQuery] = useState("");
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -3262,6 +3263,30 @@ function StudentLeadsView() {
   );
   const withPhone = profiles.filter((p) => p.phoneNumber).length;
 
+  function downloadCsv() {
+    const header = "email,phone,signed_up";
+    const rows = filtered.map((p) =>
+      [p.email || "", p.phoneNumber || "", p.createdAt ? new Date(p.createdAt).toISOString() : ""]
+        .map((v) => `"${v.replace(/"/g, '""')}"`)
+        .join(",")
+    );
+    const csv = [header, ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `student-leads-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function copyEmails() {
+    const emails = filtered.map((p) => p.email).filter(Boolean).join(", ");
+    await navigator.clipboard.writeText(emails);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
   return (
     <div className="max-w-3xl">
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
@@ -3269,14 +3294,30 @@ function StudentLeadsView() {
           <span className="font-semibold text-slate-800">{profiles.length}</span> signed up ·{" "}
           <span className="font-semibold text-slate-800">{withPhone}</span> gave a phone number
         </div>
-        <div className="relative w-64">
-          <Search size={13} className="absolute left-2.5 top-2.5 text-slate-400" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search email or phone..."
-            className="w-full text-xs border border-slate-200 rounded-md pl-7 pr-2 py-1.5"
-          />
+        <div className="flex items-center gap-2">
+          <div className="relative w-56">
+            <Search size={13} className="absolute left-2.5 top-2.5 text-slate-400" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search email or phone..."
+              className="w-full text-xs border border-slate-200 rounded-md pl-7 pr-2 py-1.5"
+            />
+          </div>
+          <button
+            onClick={copyEmails}
+            disabled={filtered.length === 0}
+            className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-md border border-slate-200 text-slate-600 shrink-0 disabled:opacity-50"
+          >
+            <Copy size={12} /> {copied ? "Copied!" : "Copy emails"}
+          </button>
+          <button
+            onClick={downloadCsv}
+            disabled={filtered.length === 0}
+            className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-md border border-slate-200 text-slate-600 shrink-0 disabled:opacity-50"
+          >
+            <Download size={12} /> Export CSV
+          </button>
         </div>
       </div>
 
