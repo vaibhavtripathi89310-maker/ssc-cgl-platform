@@ -6354,52 +6354,52 @@ function SSCSyllabusShowcase() {
 
   return (
     <div className="order-2 lg:order-1 relative z-10">
-      <div className="mb-7">
-        <img src={logoImg} alt="100 Percentiler" className="h-12 sm:h-14 w-auto mb-5" />
+      <div className="mb-4">
+        <img src={logoImg} alt="100 Percentiler" className="h-9 sm:h-10 w-auto mb-3" />
 
-        <div className="inline-flex items-center gap-1.5 bg-white/10 backdrop-blur text-blue-100 text-[11px] font-semibold uppercase tracking-wider px-3 py-1.5 rounded-full mb-4">
-          <GraduationCap size={13} /> Built exclusively for SSC CGL
+        <div className="inline-flex items-center gap-1.5 bg-white/10 backdrop-blur text-blue-100 text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full mb-2.5">
+          <GraduationCap size={12} /> Built exclusively for SSC CGL
         </div>
         <h1
-          className="text-3xl sm:text-4xl font-extrabold text-white leading-tight mb-3"
+          className="text-xl sm:text-2xl font-extrabold text-white leading-tight mb-2"
           style={{ textShadow: "0 0 40px rgba(96,165,250,0.35)" }}
         >
           The <span className="bg-gradient-to-r from-sky-300 via-blue-300 to-indigo-300 bg-clip-text text-transparent">Smartest</span> SSC CGL Test Portal.
         </h1>
-        <p className="text-sm text-blue-200/80 max-w-md mb-6">
+        <p className="text-xs text-blue-200/80 max-w-md mb-3">
           Real exam-pattern mocks, topic-wise practice mapped to the actual syllabus, and deep performance
           analysis after every attempt — all in one place.
         </p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {features.map((f) => (
             <div
               key={f.label}
-              className="flex flex-col items-center text-center gap-2 bg-blue-950/40 backdrop-blur border border-blue-400/20 rounded-xl px-2 py-3.5 hover:border-blue-300/60 hover:shadow-[0_0_20px_rgba(59,130,246,0.35)] transition-all duration-300"
+              className="flex flex-col items-center text-center gap-1.5 bg-blue-950/40 backdrop-blur border border-blue-400/20 rounded-xl px-2 py-2 hover:border-blue-300/60 hover:shadow-[0_0_20px_rgba(59,130,246,0.35)] transition-all duration-300"
             >
-              <div className="w-9 h-9 rounded-full bg-blue-500/10 border border-blue-400/30 flex items-center justify-center">
-                <f.icon size={16} className="text-blue-300" />
+              <div className="w-7 h-7 rounded-full bg-blue-500/10 border border-blue-400/30 flex items-center justify-center">
+                <f.icon size={13} className="text-blue-300" />
               </div>
-              <span className="text-[11px] text-blue-100/90 leading-tight">{f.label}</span>
+              <span className="text-[10px] text-blue-100/90 leading-tight">{f.label}</span>
             </div>
           ))}
         </div>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
         {sections.map((s) => (
           <div
             key={s.label}
-            className="group relative bg-blue-950/40 backdrop-blur border border-blue-400/20 rounded-2xl p-4 overflow-hidden hover:border-blue-300/50 hover:-translate-y-1 hover:shadow-[0_0_25px_rgba(59,130,246,0.3)] transition-all duration-300"
+            className="group relative bg-blue-950/40 backdrop-blur border border-blue-400/20 rounded-2xl p-2.5 overflow-hidden hover:border-blue-300/50 hover:-translate-y-1 hover:shadow-[0_0_25px_rgba(59,130,246,0.3)] transition-all duration-300"
           >
             <div className={`absolute inset-y-0 left-0 w-1 bg-gradient-to-b ${s.bar}`} />
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-3 border ${s.accent}`}>
-              <s.icon size={17} />
+            <div className={`w-7 h-7 rounded-lg flex items-center justify-center mb-2 border ${s.accent}`}>
+              <s.icon size={14} />
             </div>
-            <h3 className="text-sm font-semibold text-white mb-2.5">{s.label}</h3>
-            <div className="space-y-1.5">
-              {s.topics.map((t) => (
-                <div key={t.label} className="flex items-center gap-1.5 text-[11px] text-blue-200/70">
-                  <t.icon size={11} className="shrink-0" />
-                  {t.label}
+            <h3 className="text-[11px] font-semibold text-white mb-1.5 leading-tight">{s.label}</h3>
+            <div className="space-y-1">
+              {s.topics.slice(0, 3).map((t) => (
+                <div key={t.label} className="flex items-center gap-1 text-[10px] text-blue-200/70">
+                  <t.icon size={10} className="shrink-0" />
+                  <span className="truncate">{t.label}</span>
                 </div>
               ))}
             </div>
@@ -6530,24 +6530,24 @@ function StudentGate({ children }) {
 
   if (!session) {
     return (
-      <div className="geo-bg-gradient relative min-h-screen overflow-hidden">
+      <div className="geo-bg-gradient relative min-h-screen lg:h-screen overflow-hidden">
         <GeometricSignInBackground />
         <img
           src={heroCharacter}
           alt=""
           aria-hidden="true"
-          className="hidden lg:block absolute right-[3%] bottom-0 h-[95vh] object-contain object-bottom pointer-events-none select-none"
+          className="hidden lg:block absolute right-[3%] bottom-0 h-[85vh] object-contain object-bottom pointer-events-none select-none"
           style={{ filter: "drop-shadow(0 0 60px rgba(56,130,246,0.5))" }}
         />
-        <div className="relative min-h-screen flex items-center justify-center p-6 py-12">
-          <div className="relative w-full max-w-5xl grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-10 items-center">
+        <div className="relative min-h-screen lg:h-full flex items-center justify-center p-6 py-8">
+          <div className="relative w-full max-w-5xl grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-8 items-center">
             <SSCSyllabusShowcase />
-            <div className="order-1 lg:order-2 relative z-10 animate-fade-slide max-w-sm w-full mx-auto lg:mx-0 bg-blue-950/60 backdrop-blur-md rounded-2xl p-8 text-center shadow-2xl shadow-blue-950/70 border border-blue-400/25">
-              <div className="inline-flex items-center gap-1.5 bg-blue-500/15 text-blue-200 border border-blue-400/30 text-xs font-medium px-3 py-1.5 rounded-full mb-5">
+            <div className="order-1 lg:order-2 relative z-10 animate-fade-slide max-w-sm w-full mx-auto lg:mx-0 bg-blue-950/60 backdrop-blur-md rounded-2xl p-7 text-center shadow-2xl shadow-blue-950/70 border border-blue-400/25">
+              <div className="inline-flex items-center gap-1.5 bg-blue-500/15 text-blue-200 border border-blue-400/30 text-xs font-medium px-3 py-1.5 rounded-full mb-4">
                 <Sparkles size={13} /> The 100 Percentiler
               </div>
               <h1 className="text-lg font-semibold text-white mb-1.5">Sign in to continue</h1>
-              <p className="text-sm text-blue-200/80 mb-6">Sign in with Google to take mock tests and practice questions.</p>
+              <p className="text-sm text-blue-200/80 mb-5">Sign in with Google to take mock tests and practice questions.</p>
               <button
                 onClick={() => signInWithGoogle()}
                 className="w-full flex items-center justify-center gap-2 bg-white border border-white/50 text-slate-700 text-sm font-medium rounded-lg py-2.5 hover:shadow-[0_0_20px_rgba(255,255,255,0.4)] hover:-translate-y-0.5 transition-all"
