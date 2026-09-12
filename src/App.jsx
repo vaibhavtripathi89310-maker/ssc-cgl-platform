@@ -8,7 +8,7 @@ import {
   TrendingUp, Target, Youtube, Trophy, Flame, Share2, BarChart2,
   Swords, ThumbsUp, ThumbsDown, Link2, Activity,
   Landmark, GraduationCap, Award, Sparkles, FileText, Layers, BookOpen, Users,
-  Zap, ShieldCheck, MousePointerClick,
+  Zap, ShieldCheck, MousePointerClick, Puzzle, Calculator,
 } from "lucide-react";
 import {
   loadMocksIndex, saveMocksIndex, loadMockQuestions, saveMockQuestions, deleteMockQuestions,
@@ -353,6 +353,18 @@ const PRACTICE_DIFFICULTY_COLORS = {
   Medium: "bg-amber-100 text-amber-700 border-amber-200",
   Hard: "bg-red-100 text-red-700 border-red-200",
 };
+// Presentation only, for the Practice Ground pickers — an icon + accent
+// color per SSC CGL section, matching the same violet/sky/emerald/amber
+// scheme used on the sign-in page's syllabus chips. GMAT/SNAP sections have
+// no curated Practice Ground content yet (see CURATED_PRACTICE_TOPICS), so
+// they intentionally have no entry here and fall back to a neutral style.
+const PRACTICE_SECTION_STYLE = {
+  gi_reasoning: { icon: Puzzle, accent: "text-violet-600 bg-violet-100 border-violet-200", bar: "from-violet-400 to-violet-600" },
+  general_awareness: { icon: Landmark, accent: "text-amber-600 bg-amber-100 border-amber-200", bar: "from-amber-400 to-amber-600" },
+  quant_aptitude: { icon: Calculator, accent: "text-sky-600 bg-sky-100 border-sky-200", bar: "from-sky-400 to-sky-600" },
+  english_comprehension: { icon: BookOpen, accent: "text-emerald-600 bg-emerald-100 border-emerald-200", bar: "from-emerald-400 to-emerald-600" },
+};
+const DEFAULT_PRACTICE_SECTION_STYLE = { icon: BookOpen, accent: "text-slate-600 bg-slate-100 border-slate-200", bar: "from-slate-400 to-slate-600" };
 // Curated topic lists for Practice Ground, keyed by exam then section key
 // (same section keys EXAMS already uses) — picked from a fixed list instead
 // of free-typed, so a topic name can never accidentally drift/mismatch
@@ -5520,22 +5532,32 @@ function PracticeGroundSectionPickerView({ exam, onPick, onBack }) {
 
       <main className="max-w-5xl mx-auto px-6 -mt-6 pb-16 relative">
         <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {exam.sections.map((s) => (
-            <button
-              key={s.key}
-              onClick={() => onPick(s)}
-              className={`group bg-white border border-slate-200 rounded-2xl p-6 text-left shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 ${theme.ring}`}
-            >
-              <div className="flex items-center justify-between">
-                <h3 className="text-base font-bold text-slate-800">{s.label}</h3>
-                <span
-                  className={`inline-flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br ${theme.gradient} text-white group-hover:scale-110 transition-transform`}
-                >
-                  <ArrowRight size={15} />
-                </span>
-              </div>
-            </button>
-          ))}
+          {exam.sections.map((s) => {
+            const style = PRACTICE_SECTION_STYLE[s.key] || DEFAULT_PRACTICE_SECTION_STYLE;
+            return (
+              <button
+                key={s.key}
+                onClick={() => onPick(s)}
+                className={`group relative overflow-hidden bg-white border border-slate-200 rounded-2xl p-6 text-left shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 ${theme.ring}`}
+              >
+                <div className={`absolute inset-y-0 left-0 w-1.5 bg-gradient-to-b ${style.bar}`} />
+                <div className="flex items-center gap-4">
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border ${style.accent}`}>
+                    <style.icon size={22} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-base font-bold text-slate-800">{s.label}</h3>
+                    <p className="text-xs text-slate-400 mt-0.5">Topic-wise practice, any difficulty</p>
+                  </div>
+                  <span
+                    className={`inline-flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br ${theme.gradient} text-white group-hover:translate-x-0.5 transition-transform shrink-0`}
+                  >
+                    <ArrowRight size={15} />
+                  </span>
+                </div>
+              </button>
+            );
+          })}
         </div>
       </main>
     </div>
@@ -5595,27 +5617,43 @@ function PracticeGroundPickerView({ exam, section, onStart, onBack }) {
             No practice questions have been added for {section.label} yet — check back soon.
           </div>
         ) : (
-          <div className="mt-8 space-y-3">
-            {topics.map((t) => (
-              <div key={t.topic} className="bg-white border border-slate-200 rounded-2xl p-5">
-                <h3 className="text-sm font-semibold text-slate-800 mb-3">{t.topic}</h3>
-                <div className="flex flex-wrap gap-2">
-                  {PRACTICE_DIFFICULTIES.map((d) => {
-                    const count = t[d] || 0;
-                    return (
-                      <button
-                        key={d}
-                        onClick={() => count > 0 && onStart(t.topic, d)}
-                        disabled={count === 0}
-                        className={`text-xs font-medium px-3.5 py-2 rounded-full border transition-colors disabled:opacity-40 disabled:cursor-default ${PRACTICE_DIFFICULTY_COLORS[d]}`}
-                      >
-                        {d} · {count}
-                      </button>
-                    );
-                  })}
+          <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+            {topics.map((t) => {
+              const style = PRACTICE_SECTION_STYLE[section.key] || DEFAULT_PRACTICE_SECTION_STYLE;
+              const total = PRACTICE_DIFFICULTIES.reduce((sum, d) => sum + (t[d] || 0), 0);
+              return (
+                <div
+                  key={t.topic}
+                  className="group relative overflow-hidden bg-white border border-slate-200 rounded-2xl p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300"
+                >
+                  <div className={`absolute inset-y-0 left-0 w-1.5 bg-gradient-to-b ${style.bar}`} />
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${style.accent}`}>
+                      <style.icon size={17} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm font-bold text-slate-800 truncate">{t.topic}</h3>
+                      <p className="text-[11px] text-slate-400">{total} question{total === 1 ? "" : "s"} total</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {PRACTICE_DIFFICULTIES.map((d) => {
+                      const count = t[d] || 0;
+                      return (
+                        <button
+                          key={d}
+                          onClick={() => count > 0 && onStart(t.topic, d)}
+                          disabled={count === 0}
+                          className={`text-xs font-semibold px-3.5 py-2 rounded-full border transition-all disabled:opacity-30 disabled:cursor-default hover:shadow-sm hover:-translate-y-0.5 ${PRACTICE_DIFFICULTY_COLORS[d]}`}
+                        >
+                          {d} · {count}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </main>
