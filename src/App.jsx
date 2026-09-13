@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useContext, createCont
 import heroCharacter from "./assets/hero-character.png";
 import logoImg from "./assets/logo.png";
 import signInBg from "./assets/sign-in-bg.png";
+import examPickerBg from "./assets/exam-picker-bg.png";
 import {
   LayoutDashboard, ListChecks, Plus, Search, Pencil, Eye, Copy, Trash2,
   CheckCircle2, XCircle, AlertCircle, ChevronUp, ChevronDown, Upload,
@@ -6380,8 +6381,9 @@ function StudentApp() {
       const count = publishedMocks.filter((m) => getExamKey(m) === exam.key).length;
       return (
         <div className="relative min-h-screen overflow-hidden bg-blue-950">
-          <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${signInBg})` }} />
+          <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${examPickerBg})` }} />
           <div className="absolute inset-0 bg-gradient-to-b from-blue-950/70 via-blue-950/55 to-blue-950/90" />
+          <GeometricSignInBackground />
           <div className="relative max-w-2xl mx-auto px-6 py-16 sm:py-24 text-center">
             <div className="inline-flex items-center gap-1.5 bg-white/10 backdrop-blur text-blue-100 text-xs font-medium px-3 py-1.5 rounded-full mb-6">
               <Sparkles size={13} /> The 100 Percentiler
