@@ -5570,12 +5570,29 @@ function WeakTopicPracticeView({ topics, onExit }) {
   );
 }
 
+// Floating icon badges for the ambient background — one per real SSC CGL
+// section (same icon/color pairing as PRACTICE_SECTION_STYLE, so a student
+// sees the same visual language on the mock list as on Practice Ground) plus
+// one for AI Performance Analysis, an actual shipped feature (not a made-up
+// one — see api/analyze-attempt.js). Deliberately no icon for anything that
+// isn't real, matching the same "don't claim what isn't built" rule the
+// sign-in hero follows.
+const FLOATING_SYLLABUS_ICONS = [
+  { icon: Puzzle, label: "Reasoning", top: "14%", left: "10%", accent: "text-violet-600 bg-white/90 border-violet-200", anim: "geo-float-a", size: 56 },
+  { icon: Calculator, label: "Quant", top: "58%", left: "5%", accent: "text-sky-600 bg-white/90 border-sky-200", anim: "geo-float-b", size: 60 },
+  { icon: BookOpen, label: "English", top: "16%", right: "16%", accent: "text-emerald-600 bg-white/90 border-emerald-200", anim: "geo-spin-slow", size: 52 },
+  { icon: Landmark, label: "GA", bottom: "16%", right: "8%", accent: "text-amber-600 bg-white/90 border-amber-200", anim: "geo-float-a", size: 58 },
+  { icon: Sparkles, label: "AI Analysis", bottom: "34%", left: "42%", accent: "text-blue-600 bg-white/90 border-blue-200", anim: "geo-pulse", size: 54 },
+];
+
 // Light-background counterpart to the sign-in hero's dark geometric
-// background: big saturated drifting color blobs plus a scattering of
-// floating outline shapes (same rings/dots/float-and-spin CSS classes as
-// GeometricSignInBackground, just recolored for a light backdrop). Pure CSS,
-// no JS/physics — this is a secondary browsing screen, not a first
-// impression, so the motion is real but doesn't need cursor interaction.
+// background: big saturated drifting color blobs, a scattering of floating
+// outline shapes, and — since a plain abstract background read as too
+// generic for what's actually a syllabus-driven product — a set of floating
+// icon badges for each real SSC CGL section plus AI Performance Analysis.
+// Pure CSS, no JS/physics — this is a secondary browsing screen, not a
+// first impression, so the motion is real but doesn't need cursor
+// interaction.
 function AmbientOrbBackground() {
   const shapes = [
     { top: "10%", left: "8%", size: 70, kind: "ring", color: "border-blue-400/40", anim: "geo-spin-slow" },
@@ -5599,6 +5616,17 @@ function AmbientOrbBackground() {
           ) : (
             <div className={`w-full h-full rounded-full ${s.color}`} />
           )}
+        </div>
+      ))}
+      {FLOATING_SYLLABUS_ICONS.map((f, i) => (
+        <div
+          key={i}
+          className={f.anim}
+          style={{ position: "absolute", top: f.top, left: f.left, right: f.right, bottom: f.bottom, width: f.size, height: f.size }}
+        >
+          <div className={`w-full h-full rounded-full border-2 shadow-md flex items-center justify-center backdrop-blur-sm ${f.accent}`}>
+            <f.icon size={Math.round(f.size * 0.42)} />
+          </div>
         </div>
       ))}
     </div>
