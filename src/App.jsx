@@ -5237,13 +5237,13 @@ function AnswerReviewCard({ qq, sectionLabel, qNumber, sel, timeInfo, forceExpan
 // data instead (see SectionPerformancePicker above).
 function useSectionStats(attempts, mocksIndex) {
   const [sectionAccuracy, setSectionAccuracy] = useState([]);
-  const [sillyMistakeCount, setSillyMistakeCount] = useState(0);
+  const [sillyMistakes, setSillyMistakes] = useState([]); // full detail, not just a count — powers the drill-down list
   const [statsLoading, setStatsLoading] = useState(true);
 
   useEffect(() => {
     if (attempts.length === 0) {
       setSectionAccuracy([]);
-      setSillyMistakeCount(0);
+      setSillyMistakes([]);
       setStatsLoading(false);
       return;
     }
@@ -5252,20 +5252,20 @@ function useSectionStats(attempts, mocksIndex) {
       setStatsLoading(true);
       const mockIds = [...new Set(attempts.map((a) => a.mockId))];
       const questionMaps = await Promise.all(mockIds.map((id) => loadMockQuestions(id).catch(() => ({}))));
-      const qLookup = {}; // qId -> { answer, sectionKey }
+      const qLookup = {}; // qId -> { answer, sectionKey, text, options }
       const mockMeta = {}; // mockId -> { mock, qMap }
       mockIds.forEach((mockId, i) => {
         const qMap = questionMaps[i];
         mockMeta[mockId] = { mock: mocksIndex.find((m) => m.id === mockId), qMap };
         Object.entries(qMap).forEach(([sectionKey, list]) => {
           (list || []).forEach((q) => {
-            qLookup[q.id] = { answer: q.answer, sectionKey };
+            qLookup[q.id] = { answer: q.answer, sectionKey, text: q.text, options: q.options };
           });
         });
       });
 
       const secAgg = {};
-      let sillyCount = 0;
+      const silly = [];
       attempts.forEach((a) => {
         const meta = mockMeta[a.mockId];
         if (!meta?.mock) return;
@@ -5288,7 +5288,21 @@ function useSectionStats(attempts, mocksIndex) {
           const sectionQCount = (meta.qMap[q.sectionKey] || []).length || 1;
           const parTime = perSectionSeconds / sectionQCount;
           const spent = (a.timeSpent || {})[qId] || 0;
-          if (spent < parTime * 0.4) sillyCount += 1;
+          if (spent < parTime * 0.4) {
+            silly.push({
+              attemptId: a.id,
+              mockId: a.mockId,
+              mockTitle: meta.mock.title || "Untitled mock",
+              sectionLabel: label,
+              questionText: q.text,
+              options: q.options,
+              selectedIndex: sel,
+              correctIndex: q.answer,
+              spentSeconds: Math.round(spent),
+              parSeconds: Math.round(parTime),
+              attemptedAt: a.createdAt,
+            });
+          }
         });
       });
 
@@ -5298,7 +5312,7 @@ function useSectionStats(attempts, mocksIndex) {
             .map(([label, v]) => ({ label, ...v, accuracy: v.correct / v.total }))
             .sort((a, b) => b.total - a.total)
         );
-        setSillyMistakeCount(sillyCount);
+        setSillyMistakes(silly.sort((a, b) => new Date(b.attemptedAt) - new Date(a.attemptedAt)));
         setStatsLoading(false);
       }
     })();
@@ -5308,45 +5322,127 @@ function useSectionStats(attempts, mocksIndex) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attempts]);
 
-  return { sectionAccuracy, sillyMistakeCount, statsLoading };
+  return { sectionAccuracy, sillyMistakes, statsLoading };
+}
+
+// Drill-down list behind the "Silly mistakes" stat card — every wrong
+// answer flagged as a rushed guess (see useSectionStats), with the actual
+// question, what was picked vs. the correct option, and how fast it was
+// answered vs. a fair pace for that question.
+function SillyMistakesModal({ mistakes, onClose }) {
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[85vh] flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-800">Silly mistakes</h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {mistakes.length} question{mistakes.length === 1 ? "" : "s"} answered wrong in well under a fair pace — likely rushed guesses, not gaps in knowledge.
+            </p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 shrink-0">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="overflow-y-auto p-5 space-y-3">
+          {mistakes.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-8">No silly mistakes found — nice and steady pacing.</p>
+          ) : (
+            mistakes.map((m, i) => (
+              <div key={i} className="border border-slate-200 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-2 text-xs text-slate-400">
+                  <span>{m.mockTitle} · {m.sectionLabel}</span>
+                  <span className="flex items-center gap-1 text-amber-600 font-medium">
+                    <Clock size={12} /> {m.spentSeconds}s (fair pace: ~{m.parSeconds}s)
+                  </span>
+                </div>
+                <p className="text-sm text-slate-800 mb-2.5">
+                  <MathText text={m.questionText} />
+                </p>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <span className="px-2 py-1 rounded-md bg-red-50 text-red-700 border border-red-200">
+                    You picked: {m.selectedIndex != null ? <MathText text={m.options[m.selectedIndex]} /> : "Skipped"}
+                  </span>
+                  <span className="px-2 py-1 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    Correct: <MathText text={m.options[m.correctIndex]} />
+                  </span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // The stat-cards + trend chart + subject-accuracy/donut block — shared
 // between My Progress (all of this device's attempts) and the results
 // screen's "your performance in this exam" panel (attempts pre-filtered to
 // just the exam of the mock just taken). Renders nothing for zero attempts.
+// Every stat card here is a real jump-off point, not just a number: "Tests
+// taken" scrolls to the actual attempt list, the score/accuracy cards
+// scroll to the trend chart that explains them, and "Silly mistakes" opens
+// the real question-by-question list behind that estimate — nothing is a
+// dead end.
+function StatCard({ value, label, onClick, accent }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={!onClick}
+      className={`group text-left bg-white border border-slate-200 rounded-lg p-4 transition-all duration-200 ${
+        onClick ? "hover:border-blue-300 hover:shadow-md hover:-translate-y-0.5 cursor-pointer" : "cursor-default"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className={`text-2xl font-semibold ${accent || "text-slate-800"}`}>{value}</div>
+        {onClick && (
+          <ArrowRight size={14} className="text-slate-300 group-hover:text-blue-500 group-hover:translate-x-0.5 transition-all shrink-0 mt-1.5" />
+        )}
+      </div>
+      <div className="text-xs text-slate-500 mt-0.5">{label}</div>
+    </button>
+  );
+}
+
 function ExamPerformancePanel({ attempts, mocksIndex }) {
+  const [showSillyMistakes, setShowSillyMistakes] = useState(false);
   const last8 = attempts.slice(-8);
   const avgScorePct = last8.length
     ? Math.round(last8.reduce((sum, a) => sum + scorePercentFor(a, mocksIndex, accuracyPercentFor(a)), 0) / last8.length)
     : null;
   const avgAccuracyPct = last8.length ? Math.round(last8.reduce((sum, a) => sum + accuracyPercentFor(a), 0) / last8.length) : null;
-  const { sectionAccuracy, sillyMistakeCount, statsLoading } = useSectionStats(attempts, mocksIndex);
+  const { sectionAccuracy, sillyMistakes, statsLoading } = useSectionStats(attempts, mocksIndex);
 
   if (attempts.length === 0) return null;
+
+  function scrollTo(id) {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   return (
     <>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-        <div className="bg-white border border-slate-200 rounded-lg p-4">
-          <div className="text-2xl font-semibold text-slate-800">{attempts.length}</div>
-          <div className="text-xs text-slate-500 mt-0.5">Tests taken</div>
-        </div>
-        <div className="bg-white border border-slate-200 rounded-lg p-4">
-          <div className="text-2xl font-semibold text-slate-800">{avgScorePct === null ? "—" : `${avgScorePct}%`}</div>
-          <div className="text-xs text-slate-500 mt-0.5">Avg score (last {last8.length})</div>
-        </div>
-        <div className="bg-white border border-slate-200 rounded-lg p-4">
-          <div className="text-2xl font-semibold text-slate-800">{avgAccuracyPct === null ? "—" : `${avgAccuracyPct}%`}</div>
-          <div className="text-xs text-slate-500 mt-0.5">Avg accuracy (last {last8.length})</div>
-        </div>
-        <div className="bg-white border border-slate-200 rounded-lg p-4">
-          <div className="text-2xl font-semibold text-slate-800">{statsLoading ? "—" : sillyMistakeCount}</div>
-          <div className="text-xs text-slate-500 mt-0.5">Silly mistakes (est.)</div>
-        </div>
+        <StatCard value={attempts.length} label="Tests taken" onClick={() => scrollTo("attempt-history")} />
+        <StatCard
+          value={avgScorePct === null ? "—" : `${avgScorePct}%`}
+          label={`Avg score (last ${last8.length})`}
+          onClick={() => scrollTo("score-trend")}
+        />
+        <StatCard
+          value={avgAccuracyPct === null ? "—" : `${avgAccuracyPct}%`}
+          label={`Avg accuracy (last ${last8.length})`}
+          onClick={() => scrollTo("score-trend")}
+        />
+        <StatCard
+          value={statsLoading ? "—" : sillyMistakes.length}
+          label="Silly mistakes (est.)"
+          accent="text-amber-600"
+          onClick={sillyMistakes.length > 0 ? () => setShowSillyMistakes(true) : undefined}
+        />
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-xl p-5 mb-4">
+      <div id="score-trend" className="bg-white border border-slate-200 rounded-xl p-5 mb-4 scroll-mt-4">
         <h2 className="text-sm font-semibold text-slate-700 mb-3">Score &amp; accuracy trend</h2>
         <ProgressTrendChart attempts={attempts} mocksIndex={mocksIndex} />
       </div>
@@ -5364,6 +5460,8 @@ function ExamPerformancePanel({ attempts, mocksIndex }) {
           <AnswerBreakdownDonut attempts={attempts} />
         </div>
       </div>
+
+      {showSillyMistakes && <SillyMistakesModal mistakes={sillyMistakes} onClose={() => setShowSillyMistakes(false)} />}
     </>
   );
 }
@@ -5479,7 +5577,7 @@ function ProgressView({ attempts, mocksIndex, onBack, onPractice }) {
               </div>
             )}
 
-            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+            <div id="attempt-history" className="bg-white border border-slate-200 rounded-xl overflow-hidden scroll-mt-4">
               <div className="px-5 py-3 border-b border-slate-100">
                 <h2 className="text-sm font-semibold text-slate-700">Attempt history</h2>
               </div>
