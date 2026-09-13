@@ -5408,7 +5408,7 @@ function ProgressView({ attempts, mocksIndex, onBack, onPractice }) {
         )}
       </header>
 
-      <main className="p-6 max-w-3xl mx-auto">
+      <main className="p-6 max-w-6xl mx-auto">
         {attempts.length === 0 ? (
           <div className="bg-white border border-dashed border-slate-200 rounded-xl p-12 text-center text-sm text-slate-400">
             You haven't attempted any tests on this device yet — take a mock to start tracking your progress.
