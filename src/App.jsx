@@ -6367,6 +6367,76 @@ function StudentApp() {
   }
 
   if (view === "exam") {
+    const availableExams = EXAM_LIST.filter((exam) => exam.key === DEFAULT_EXAM || gmatSnapEnabled);
+
+    // The common case (GMAT/SNAP off, see GmatSnapToggle): only SSC CGL is
+    // available, so asking "which exam are you preparing for?" makes no
+    // sense — there's nothing to choose. This is a dedicated SSC-CGL-only
+    // hero instead of the generic multi-exam picker below.
+    if (availableExams.length === 1 && availableExams[0].key === DEFAULT_EXAM) {
+      const exam = availableExams[0];
+      const theme = EXAM_THEME[exam.key];
+      const Icon = theme.icon;
+      const count = publishedMocks.filter((m) => getExamKey(m) === exam.key).length;
+      return (
+        <div className="relative min-h-screen overflow-hidden bg-blue-950">
+          <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${signInBg})` }} />
+          <div className="absolute inset-0 bg-gradient-to-b from-blue-950/70 via-blue-950/55 to-blue-950/90" />
+          <div className="relative max-w-2xl mx-auto px-6 py-16 sm:py-24 text-center">
+            <div className="inline-flex items-center gap-1.5 bg-white/10 backdrop-blur text-blue-100 text-xs font-medium px-3 py-1.5 rounded-full mb-6">
+              <Sparkles size={13} /> The 100 Percentiler
+            </div>
+            <h1 className="text-3xl sm:text-5xl font-bold text-white mb-3 leading-tight">
+              Your <span className="bg-gradient-to-r from-sky-300 via-blue-300 to-indigo-300 bg-clip-text text-transparent">SSC CGL</span> Journey Starts Here
+            </h1>
+            <p className="text-sm sm:text-base text-blue-200/80 mb-10">
+              {publishedMocks.length} mock test{publishedMocks.length === 1 ? "" : "s"} live and ready — jump in and get started.
+            </p>
+
+            <button
+              onClick={() => chooseExam(exam.key)}
+              className="group relative w-full bg-blue-950/50 backdrop-blur-md border-2 border-blue-400/40 rounded-2xl p-7 text-left shadow-[0_0_40px_rgba(59,130,246,0.25)] hover:shadow-[0_0_60px_rgba(59,130,246,0.4)] hover:-translate-y-1 transition-all duration-300"
+            >
+              <div className="w-14 h-14 rounded-2xl bg-blue-500/10 border border-blue-400/40 flex items-center justify-center mb-4">
+                <Icon size={26} className="text-blue-300" />
+              </div>
+              <h2 className="text-xl font-bold text-white mb-1.5">{exam.label}</h2>
+              <p className="text-sm text-blue-200/70 mb-5">{exam.tagline}</p>
+              <div className="flex flex-wrap gap-1.5 mb-6">
+                {exam.sections.map((s) => (
+                  <span key={s.key} className="text-[10px] font-semibold px-2.5 py-1 rounded-full bg-blue-500/10 border border-blue-400/30 text-blue-200">
+                    {s.short}
+                  </span>
+                ))}
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full bg-blue-500/15 border border-blue-400/30 text-blue-200">
+                  <FileText size={13} /> {count} test{count === 1 ? "" : "s"} available
+                </span>
+                <span className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 text-white group-hover:scale-110 transition-transform">
+                  <ArrowRight size={16} />
+                </span>
+              </div>
+            </button>
+
+            <div className="flex items-center justify-center gap-2.5 mt-12 text-[11px] font-semibold uppercase tracking-wider">
+              <span className="flex items-center gap-1.5 text-blue-200">
+                <span className="w-2 h-2 rounded-full bg-blue-300" /> Explore Tests
+              </span>
+              <span className="w-8 h-px bg-blue-400/30" />
+              <span className="flex items-center gap-1.5 text-blue-300/60">
+                <span className="w-2 h-2 rounded-full border border-blue-400/40" /> Take a Mock
+              </span>
+              <span className="w-8 h-px bg-blue-400/30" />
+              <span className="flex items-center gap-1.5 text-blue-300/60">
+                <span className="w-2 h-2 rounded-full border border-blue-400/40" /> See Your Results
+              </span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50">
         <div className="relative overflow-hidden bg-gradient-to-br from-blue-950 via-blue-900 to-indigo-900 text-white px-6 py-16 sm:py-20">
@@ -6390,7 +6460,7 @@ function StudentApp() {
               empty gap next to it. This centers however many exams are
               actually visible, 1 or 3. */}
           <div className="flex flex-wrap justify-center gap-6">
-            {EXAM_LIST.filter((exam) => exam.key === DEFAULT_EXAM || gmatSnapEnabled).map((exam) => {
+            {availableExams.map((exam) => {
               const theme = EXAM_THEME[exam.key];
               const Icon = theme.icon;
               const count = publishedMocks.filter((m) => getExamKey(m) === exam.key).length;
