@@ -20,6 +20,7 @@ import {
   loadPracticeTopicSummary, loadPracticeQuestions, loadAllPracticeQuestions,
   savePracticeQuestions, deletePracticeQuestion, deletePracticeQuestions,
   loadPracticeGroundEnabled, setPracticeGroundEnabled,
+  loadGmatSnapEnabled, setGmatSnapEnabled,
   loadDistinctMockIdsTakenByUser, loadStudentProfile, ensureStudentProfile,
   saveStudentPhoneNumber, loadAllStudentProfiles, checkIsAdmin,
   ensureUsername, saveUsername, loadUsernamesByIds,
@@ -1181,6 +1182,63 @@ function ImportDataView({ onImport }) {
   );
 }
 
+// SSC CGL always shows as an exam choice on the student side; this is the
+// one switch that decides whether GMAT and SNAP show up alongside it.
+// Same on/off/loading pattern as the Practice Ground toggle in
+// PracticeBankView, just against a different app_settings key.
+function GmatSnapToggle() {
+  const [enabled, setEnabled] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [toggling, setToggling] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        setEnabled(await loadGmatSnapEnabled());
+      } catch {
+        // Leave it at the safe default (hidden) if this fails to load.
+      } finally {
+        setLoaded(true);
+      }
+    })();
+  }, []);
+
+  async function toggle() {
+    const next = !enabled;
+    setToggling(true);
+    try {
+      await setGmatSnapEnabled(next);
+      setEnabled(next);
+    } finally {
+      setToggling(false);
+    }
+  }
+
+  return (
+    <div className={`flex items-center justify-between gap-3 border rounded-lg px-4 py-3 mb-8 ${enabled ? "bg-emerald-50 border-emerald-200" : "bg-slate-100 border-slate-200"}`}>
+      <div>
+        <div className="text-sm font-medium text-slate-800">
+          {enabled ? "GMAT & SNAP are visible to students" : "GMAT & SNAP are hidden from students"}
+        </div>
+        <div className="text-xs text-slate-500 mt-0.5">
+          {enabled
+            ? "Students see all three exams on the exam-picker screen."
+            : "Students only see SSC CGL until you turn this on — SSC CGL is never affected by this switch."}
+        </div>
+      </div>
+      <button
+        onClick={toggle}
+        disabled={!loaded || toggling}
+        role="switch"
+        aria-checked={enabled}
+        className={`shrink-0 w-11 h-6 rounded-full relative transition-colors disabled:opacity-50 ${enabled ? "bg-emerald-500" : "bg-slate-300"}`}
+      >
+        <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${enabled ? "translate-x-5" : "translate-x-0"}`} />
+      </button>
+    </div>
+  );
+}
+
 function DashboardView({ mocksIndex, questionCounts, onGoList, onCreateNew }) {
   const published = mocksIndex.filter((m) => m.status === "published").length;
   const draft = mocksIndex.length - published;
@@ -1195,6 +1253,7 @@ function DashboardView({ mocksIndex, questionCounts, onGoList, onCreateNew }) {
 
   return (
     <div>
+      <GmatSnapToggle />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         {cards.map((c) => (
           <div key={c.label} className="bg-white border border-slate-200 rounded-lg p-4">
@@ -6055,6 +6114,15 @@ function StudentApp() {
       .catch(() => {});
   }, []);
 
+  // Same admin-controlled pattern — SSC CGL always shows regardless of this;
+  // it only decides whether GMAT/SNAP appear as exam choices at all.
+  const [gmatSnapEnabled, setGmatSnapEnabledLocal] = useState(false);
+  useEffect(() => {
+    loadGmatSnapEnabled()
+      .then(setGmatSnapEnabledLocal)
+      .catch(() => {});
+  }, []);
+
   // Same storage source as AdminPanel — no separate student store. Reloading
   // on every visit to a list screen (not just once on mount) means an admin
   // publishing/unpublishing while a student has the tab open is picked up
@@ -6317,7 +6385,7 @@ function StudentApp() {
 
         <main className="max-w-5xl mx-auto px-6 -mt-10 pb-16 relative">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {EXAM_LIST.map((exam) => {
+            {EXAM_LIST.filter((exam) => exam.key === DEFAULT_EXAM || gmatSnapEnabled).map((exam) => {
               const theme = EXAM_THEME[exam.key];
               const Icon = theme.icon;
               const count = publishedMocks.filter((m) => getExamKey(m) === exam.key).length;

@@ -496,6 +496,21 @@ export async function setPracticeGroundEnabled(enabled) {
   if (error) throw error;
 }
 
+// Same pattern, for whether GMAT/SNAP show up as exam choices at all —
+// SSC CGL is always shown regardless of this switch. Defaults to hidden
+// (false) so a fresh deploy stays SSC-CGL-only until the admin deliberately
+// turns the other two on.
+export async function loadGmatSnapEnabled() {
+  const { data, error } = await supabase.from("app_settings").select("value").eq("key", "gmat_snap_enabled").maybeSingle();
+  if (error) throw error;
+  return data?.value === true;
+}
+
+export async function setGmatSnapEnabled(enabled) {
+  const { error } = await supabase.from("app_settings").upsert({ key: "gmat_snap_enabled", value: enabled });
+  if (error) throw error;
+}
+
 // ============================================================================
 // STUDENT PROFILES — one row per real (Google-authenticated) student
 // account: email (always present, from the OAuth sign-in itself) and phone
