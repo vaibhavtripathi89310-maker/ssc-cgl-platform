@@ -5570,19 +5570,20 @@ function WeakTopicPracticeView({ topics, onExit }) {
   );
 }
 
-// Floating icon badges for the ambient background — one per real SSC CGL
-// section (same icon/color pairing as PRACTICE_SECTION_STYLE, so a student
-// sees the same visual language on the mock list as on Practice Ground) plus
-// one for AI Performance Analysis, an actual shipped feature (not a made-up
-// one — see api/analyze-attempt.js). Deliberately no icon for anything that
-// isn't real, matching the same "don't claim what isn't built" rule the
-// sign-in hero follows.
+// Floating icon watermarks for the ambient background — one per real SSC
+// CGL section (same colors as PRACTICE_SECTION_STYLE) plus one for AI
+// Performance Analysis, an actual shipped feature (see
+// api/analyze-attempt.js), not a made-up one. Rendered as bare, low-opacity
+// outline glyphs with no circle/border/shadow around them — a filled badge
+// with a shadow reads as a clickable button (a student mistook the first
+// version for one), so these need to look unmistakably like background
+// texture, not UI.
 const FLOATING_SYLLABUS_ICONS = [
-  { icon: Puzzle, label: "Reasoning", top: "14%", left: "10%", accent: "text-violet-600 bg-white/90 border-violet-200", anim: "geo-float-a", size: 56 },
-  { icon: Calculator, label: "Quant", top: "58%", left: "5%", accent: "text-sky-600 bg-white/90 border-sky-200", anim: "geo-float-b", size: 60 },
-  { icon: BookOpen, label: "English", top: "16%", right: "16%", accent: "text-emerald-600 bg-white/90 border-emerald-200", anim: "geo-spin-slow", size: 52 },
-  { icon: Landmark, label: "GA", bottom: "16%", right: "8%", accent: "text-amber-600 bg-white/90 border-amber-200", anim: "geo-float-a", size: 58 },
-  { icon: Sparkles, label: "AI Analysis", bottom: "34%", left: "42%", accent: "text-blue-600 bg-white/90 border-blue-200", anim: "geo-pulse", size: 54 },
+  { icon: Puzzle, top: "14%", left: "10%", color: "text-violet-400", anim: "geo-float-a", size: 46 },
+  { icon: Calculator, top: "58%", left: "5%", color: "text-sky-400", anim: "geo-float-b", size: 50 },
+  { icon: BookOpen, top: "16%", right: "16%", color: "text-emerald-400", anim: "geo-spin-slow", size: 42 },
+  { icon: Landmark, bottom: "16%", right: "8%", color: "text-amber-400", anim: "geo-float-a", size: 48 },
+  { icon: Sparkles, bottom: "34%", left: "42%", color: "text-blue-400", anim: "geo-pulse", size: 44 },
 ];
 
 // Light-background counterpart to the sign-in hero's dark geometric
@@ -5624,9 +5625,7 @@ function AmbientOrbBackground() {
           className={f.anim}
           style={{ position: "absolute", top: f.top, left: f.left, right: f.right, bottom: f.bottom, width: f.size, height: f.size }}
         >
-          <div className={`w-full h-full rounded-full border-2 shadow-md flex items-center justify-center backdrop-blur-sm ${f.accent}`}>
-            <f.icon size={Math.round(f.size * 0.42)} />
-          </div>
+          <f.icon size={f.size} strokeWidth={1.25} className={`${f.color} opacity-25`} />
         </div>
       ))}
     </div>
