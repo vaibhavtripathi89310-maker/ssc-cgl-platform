@@ -7091,6 +7091,16 @@ function AdminGate({ children }) {
   // A valid Supabase session no longer means "is the admin" now that
   // students also get real accounts via Google sign-in — every session gets
   // checked against the admins table before anything renders.
+  //
+  // Keyed on session?.user.id, NOT the whole session object: Supabase's
+  // client silently re-emits auth events (new session object, same user)
+  // on things like the tab regaining focus/visibility, to refresh the
+  // token. Keying on the full session object meant every one of those
+  // re-fired setIsAdmin(undefined) below, which briefly swapped `children`
+  // out for the "Loading..." screen — unmounting AdminPanel and wiping out
+  // whatever view the admin was on. Re-checking only when the signed-in
+  // user's id actually changes fixes that without weakening the check
+  // itself (a genuinely different user still gets re-verified).
   useEffect(() => {
     if (!session) {
       setIsAdmin(session === null ? false : undefined);
@@ -7100,7 +7110,7 @@ function AdminGate({ children }) {
     checkIsAdmin(session.user.id)
       .then(setIsAdmin)
       .catch(() => setIsAdmin(false));
-  }, [session]);
+  }, [session?.user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleSubmit(e) {
     e.preventDefault();
