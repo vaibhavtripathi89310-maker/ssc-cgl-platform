@@ -6384,7 +6384,12 @@ function StudentApp() {
         </div>
 
         <main className="max-w-5xl mx-auto px-6 -mt-10 pb-16 relative">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* flex+justify-center instead of a fixed 3-col grid — with
+              GMAT/SNAP hidden by default (see GmatSnapToggle), a strict grid
+              left a single SSC CGL card stranded in one corner with a huge
+              empty gap next to it. This centers however many exams are
+              actually visible, 1 or 3. */}
+          <div className="flex flex-wrap justify-center gap-6">
             {EXAM_LIST.filter((exam) => exam.key === DEFAULT_EXAM || gmatSnapEnabled).map((exam) => {
               const theme = EXAM_THEME[exam.key];
               const Icon = theme.icon;
@@ -6393,7 +6398,7 @@ function StudentApp() {
                 <button
                   key={exam.key}
                   onClick={() => chooseExam(exam.key)}
-                  className={`group relative bg-white border border-slate-200 rounded-3xl p-7 text-left shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden ${theme.ring}`}
+                  className={`group relative bg-white border border-slate-200 rounded-3xl p-7 text-left shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden w-full sm:w-80 ${theme.ring}`}
                 >
                   <div className={`absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r ${theme.gradient}`} />
                   <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 ${theme.iconBg}`}>
