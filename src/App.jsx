@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useContext, createContext } from "react";
 import heroCharacter from "./assets/hero-character.png";
 import logoImg from "./assets/logo.png";
+import signInBg from "./assets/sign-in-bg.png";
 import {
   LayoutDashboard, ListChecks, Plus, Search, Pencil, Eye, Copy, Trash2,
   CheckCircle2, XCircle, AlertCircle, ChevronUp, ChevronDown, Upload,
@@ -7034,7 +7035,9 @@ function StudentGate({ children }) {
 
   if (!session) {
     return (
-      <div className="geo-bg-gradient relative min-h-screen lg:h-screen overflow-hidden">
+      <div className="relative min-h-screen lg:h-screen overflow-hidden bg-blue-950">
+        <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${signInBg})` }} />
+        <div className="absolute inset-0 bg-gradient-to-b from-blue-950/60 via-blue-950/40 to-blue-950/80" />
         <GeometricSignInBackground />
         <img
           src={heroCharacter}
