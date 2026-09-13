@@ -7,6 +7,12 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
+/* Handwritten-style corner annotations on the sign-in hero — decorative
+   typography only, never used for a claim/stat that needs to be true. */
+.font-handwritten {
+  font-family: "Caveat", cursive;
+}
+
 /* Recharts makes pie/bar segments focusable for keyboard accessibility, which
    means a plain click also leaves the browser's default focus rectangle
    drawn on top of the clicked slice/bar. Keyboard focus still works — this

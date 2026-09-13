@@ -6673,10 +6673,10 @@ function PhoneNumberGate() {
 // shipped capability — nothing here is a stat or a feature we haven't built.
 function SSCSyllabusShowcase() {
   const features = [
-    { icon: Clock, label: "Real Exam-Pattern Mocks" },
-    { icon: BarChart2, label: "AI Performance Analysis" },
-    { icon: BookOpen, label: "Topic-wise Practice" },
-    { icon: Trophy, label: "Leaderboard & Streaks" },
+    { icon: Clock, label: "Real Exam-Pattern Mocks", desc: "Timed tests matching the actual exam format" },
+    { icon: BarChart2, label: "AI Performance Analysis", desc: "A worked, question-by-question breakdown after every mock" },
+    { icon: BookOpen, label: "Topic-wise Practice", desc: "Practice by topic and difficulty, at your own pace" },
+    { icon: Trophy, label: "Leaderboard & Streaks", desc: "See how you rank and build a study streak" },
   ];
 
   return (
@@ -6704,16 +6704,17 @@ function SSCSyllabusShowcase() {
         Real exam-pattern mocks, topic-wise practice mapped to the actual syllabus, and deep performance
         analysis after every attempt — all in one place.
       </p>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-lg">
+      <div className="grid grid-cols-2 gap-3 max-w-lg">
         {features.map((f) => (
           <div
             key={f.label}
-            className="flex flex-col items-center text-center gap-2 bg-blue-950/40 backdrop-blur border border-blue-400/20 rounded-xl px-2 py-4 hover:border-blue-300/60 hover:shadow-[0_0_20px_rgba(59,130,246,0.35)] transition-all duration-300"
+            className="bg-blue-950/40 backdrop-blur border border-blue-400/20 rounded-xl p-3.5 hover:border-blue-300/60 hover:shadow-[0_0_20px_rgba(59,130,246,0.35)] transition-all duration-300"
           >
-            <div className="w-10 h-10 rounded-full bg-blue-500/10 border border-blue-400/30 flex items-center justify-center">
-              <f.icon size={18} className="text-blue-300" />
+            <div className="w-9 h-9 rounded-lg bg-blue-500/10 border border-blue-400/30 flex items-center justify-center mb-2.5">
+              <f.icon size={16} className="text-blue-300" />
             </div>
-            <span className="text-xs text-blue-100/90 leading-tight">{f.label}</span>
+            <div className="text-sm font-semibold text-white mb-1 leading-tight">{f.label}</div>
+            <p className="text-[11px] text-blue-200/70 leading-snug">{f.desc}</p>
           </div>
         ))}
       </div>
@@ -7046,6 +7047,20 @@ function StudentGate({ children }) {
           className="hidden lg:block absolute right-[3%] bottom-0 h-[85vh] object-contain object-bottom pointer-events-none select-none"
           style={{ filter: "drop-shadow(0 0 60px rgba(56,130,246,0.5))" }}
         />
+        {/* Purely decorative typography (a font, not a claim) — kept short
+            and generic so it's never mistaken for a real stat or feature. */}
+        <p
+          className="font-handwritten hidden lg:block absolute top-8 right-8 text-2xl text-blue-200/80 leading-tight text-right pointer-events-none select-none"
+          style={{ transform: "rotate(-3deg)" }}
+        >
+          Same syllabus.<br />Smarter preparation.
+        </p>
+        <p
+          className="font-handwritten hidden lg:block absolute top-[58%] right-[2%] text-3xl text-blue-200/80 pointer-events-none select-none"
+          style={{ transform: "rotate(-4deg)" }}
+        >
+          You've got this.
+        </p>
         <div className="relative min-h-screen lg:h-full flex items-center justify-center p-6 py-8">
           <div className="relative w-full max-w-5xl grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-8 items-center">
             <SSCSyllabusShowcase />
