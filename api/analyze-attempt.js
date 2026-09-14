@@ -162,7 +162,15 @@ export default async function handler(req, res) {
   // A valid Supabase session no longer means "is the admin" — students now
   // also get real accounts via Google sign-in. Check the admins table
   // explicitly, same fix applied to AdminGate itself client-side.
-  const supabase = createClient(supabaseUrl, supabaseAnonKey);
+  //
+  // The client must carry the caller's own JWT (not just the anon key) for
+  // the admins-table query below to work at all: that table's RLS policy is
+  // "using (auth.uid() = id)", and without this header every request here
+  // runs as the anonymous role, where auth.uid() is null — so the lookup
+  // would silently return zero rows for literally every user, admin or not.
+  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+  });
   const { data: userData, error: userError } = await supabase.auth.getUser(token);
   if (userError || !userData?.user) {
     res.status(401).json({ error: "Invalid or expired session." });
