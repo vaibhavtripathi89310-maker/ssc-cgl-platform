@@ -10,7 +10,7 @@ import {
   TrendingUp, Target, Youtube, Trophy, Flame, Share2, BarChart2,
   Swords, ThumbsUp, ThumbsDown, Link2, Activity,
   Landmark, GraduationCap, Award, Sparkles, FileText, Layers, BookOpen, Users,
-  Zap, ShieldCheck, MousePointerClick, Puzzle, Calculator,
+  Zap, ShieldCheck, MousePointerClick, Puzzle, Calculator, Bell, BellOff,
 } from "lucide-react";
 import {
   loadMocksIndex, saveMocksIndex, loadMockQuestions, saveMockQuestions, deleteMockQuestions,
@@ -29,6 +29,7 @@ import {
 import { signIn, signOut, signInWithGoogle, getSession, onAuthStateChange } from "./lib/auth";
 import { analyzeAttempt } from "./lib/aiAnalysis";
 import { getDeviceId } from "./lib/device";
+import { pushSupported, getExistingSubscription, subscribeToPush, unsubscribeFromPush, notifyStudentsOfNewMock } from "./lib/pushNotifications";
 import {
   ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   BarChart, Bar, Cell, PieChart, Pie, Legend, LabelList,
@@ -4220,6 +4221,9 @@ function AdminPanel() {
     setMocksIndex(updated);
     await saveMocksIndex(updated);
     showToast(`"${mock.title}" published.`);
+    // Best-effort — a push-notification hiccup should never make publishing
+    // itself look like it failed.
+    notifyStudentsOfNewMock(mock.title).catch(() => {});
   }
 
   async function duplicateMock(mock) {
@@ -6188,6 +6192,68 @@ function PracticeGroundRunView({ examKey, sectionKey, topic, difficulty, onExit 
   );
 }
 
+// A student's browser either has an active push subscription or it
+// doesn't — checked once on mount, then toggled explicitly. Deliberately
+// per-BROWSER, not a stored per-student preference: a phone and a laptop
+// each need their own permission grant and their own subscription record.
+function NotificationToggle({ userId }) {
+  const [supported, setSupported] = useState(true);
+  const [subscribed, setSubscribed] = useState(false);
+  const [checked, setChecked] = useState(false);
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!pushSupported()) {
+      setSupported(false);
+      setChecked(true);
+      return;
+    }
+    getExistingSubscription()
+      .then((sub) => setSubscribed(!!sub))
+      .catch(() => {})
+      .finally(() => setChecked(true));
+  }, []);
+
+  async function toggle() {
+    setWorking(true);
+    setError("");
+    try {
+      if (subscribed) {
+        await unsubscribeFromPush();
+        setSubscribed(false);
+      } else {
+        await subscribeToPush(userId);
+        setSubscribed(true);
+      }
+    } catch (err) {
+      setError(err.message || "Something went wrong.");
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  if (!supported || !checked) return null;
+
+  return (
+    <div className="flex flex-col items-center gap-1.5 mt-5 mb-6">
+      <button
+        onClick={toggle}
+        disabled={working}
+        className={`inline-flex items-center gap-1.5 text-xs font-medium px-3.5 py-2 rounded-full border transition-all disabled:opacity-50 ${
+          subscribed
+            ? "bg-emerald-500/15 border-emerald-400/40 text-emerald-200"
+            : "bg-white/10 border-white/20 text-blue-100 hover:bg-white/15"
+        }`}
+      >
+        {subscribed ? <Bell size={13} /> : <BellOff size={13} />}
+        {working ? "Working..." : subscribed ? "Notifications on for new mocks" : "Notify me about new mocks"}
+      </button>
+      {error && <p className="text-[11px] text-red-300">{error}</p>}
+    </div>
+  );
+}
+
 function StudentApp() {
   const studentSession = useStudentSession();
   const [mocksIndex, setMocksIndex] = useState([]);
@@ -6489,9 +6555,10 @@ function StudentApp() {
             <h1 className="text-3xl sm:text-5xl font-bold text-white mb-3 leading-tight">
               Your <span className="bg-gradient-to-r from-sky-300 via-blue-300 to-indigo-300 bg-clip-text text-transparent">SSC CGL</span> Journey Starts Here
             </h1>
-            <p className="text-sm sm:text-base text-blue-200/80 mb-10">
+            <p className="text-sm sm:text-base text-blue-200/80 mb-2">
               {publishedMocks.length} mock test{publishedMocks.length === 1 ? "" : "s"} live and ready — jump in and get started.
             </p>
+            <NotificationToggle userId={studentSession?.userId} />
 
             <button
               onClick={() => chooseExam(exam.key)}
