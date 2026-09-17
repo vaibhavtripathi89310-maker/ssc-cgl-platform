@@ -438,6 +438,34 @@ function formatTime(totalSec) {
   return `${m}:${s}`;
 }
 
+// Counts up from 0 to a real, already-computed number over `duration`ms —
+// used on admin dashboard/analytics stat cards so they reveal with a little
+// motion instead of appearing instantly. Never fabricates the number itself.
+function CountUp({ value, duration = 900, decimals = 0 }) {
+  const [display, setDisplay] = useState(0);
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      setDisplay(value);
+      return;
+    }
+    let raf;
+    const start = performance.now();
+    function tick(now) {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      if (t >= 1) {
+        setDisplay(value);
+        return;
+      }
+      setDisplay(value * eased);
+      raf = requestAnimationFrame(tick);
+    }
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value, duration]);
+  return <>{decimals > 0 ? display.toFixed(decimals) : Math.round(display)}</>;
+}
+
 // Shared full-screen loading state — a small spinner instead of bare
 // "Loading..." text, used wherever the app is waiting on an auth/session
 // check or the initial mock list fetch (StudentSessionProvider, AdminGate,
@@ -885,21 +913,21 @@ function AnalyticsView({ mocksIndex }) {
         <>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="bg-white border border-slate-200 rounded-lg p-4">
-              <div className="text-2xl font-semibold text-slate-800">{uniqueDevices}</div>
+              <div className="text-2xl font-semibold text-slate-800"><CountUp value={uniqueDevices} /></div>
               <div className="text-xs text-slate-500 mt-0.5">Unique devices</div>
             </div>
             <div className="bg-white border border-slate-200 rounded-lg p-4">
-              <div className="text-2xl font-semibold text-slate-800">{scopedRows.length}</div>
+              <div className="text-2xl font-semibold text-slate-800"><CountUp value={scopedRows.length} /></div>
               <div className="text-xs text-slate-500 mt-0.5">Total attempts</div>
             </div>
             <div className="bg-white border border-slate-200 rounded-lg p-4">
               <div className="text-2xl font-semibold text-slate-800">
-                {oneTimeDevices} <span className="text-sm font-normal text-slate-400">/ {returningDevices}</span>
+                <CountUp value={oneTimeDevices} /> <span className="text-sm font-normal text-slate-400">/ <CountUp value={returningDevices} /></span>
               </div>
               <div className="text-xs text-slate-500 mt-0.5">One-time / returning</div>
             </div>
             <div className="bg-white border border-slate-200 rounded-lg p-4">
-              <div className="text-2xl font-semibold text-slate-800">{avgAccuracy}%</div>
+              <div className="text-2xl font-semibold text-slate-800"><CountUp value={avgAccuracy} />%</div>
               <div className="text-xs text-slate-500 mt-0.5">Average accuracy</div>
             </div>
           </div>
@@ -1272,7 +1300,7 @@ function DashboardView({ mocksIndex, questionCounts, onGoList, onCreateNew }) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         {cards.map((c) => (
           <div key={c.label} className="bg-white border border-slate-200 rounded-lg p-4">
-            <div className="text-2xl font-semibold text-slate-800">{c.value}</div>
+            <div className="text-2xl font-semibold text-slate-800"><CountUp value={c.value} /></div>
             <div className="text-xs text-slate-500 mt-0.5">{c.label}</div>
           </div>
         ))}
@@ -3034,9 +3062,10 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
                       return (
                         <div
                           key={row.id}
-                          className={`flex items-center justify-between text-xs rounded-md px-3 py-2 ${
-                            isMe ? "bg-blue-50 border border-blue-200" : "bg-slate-50"
+                          className={`leaderboard-row-in flex items-center justify-between text-xs rounded-md px-3 py-2 ${
+                            isMe ? "leaderboard-my-row-highlight bg-blue-50 border border-blue-200" : "bg-slate-50"
                           }`}
+                          style={{ animationDelay: `${i * 0.08}s` }}
                         >
                           <span className={`flex items-center gap-1 ${isMe ? "font-semibold text-blue-800" : "text-slate-600"}`}>
                             #{i + 1}
@@ -4760,6 +4789,22 @@ function computeStreak(attempts) {
   return streak;
 }
 
+// The streak badge's flame — always gently flickering, but its glow scales
+// with the real streak length (capped at 14 days so it doesn't run away
+// visually), so a 1-day streak reads as a small ember and a 2-week streak
+// reads as a genuinely bright flame. Never shown at all for a 0 streak (see
+// caller).
+function StreakFlame({ streak }) {
+  const intensity = Math.min(1, streak / 14);
+  return (
+    <Flame
+      size={14}
+      className="streak-flame-icon"
+      style={{ filter: `drop-shadow(0 0 ${4 + intensity * 10}px rgba(251,146,60,${0.5 + intensity * 0.5}))` }}
+    />
+  );
+}
+
 // Score, normalized to a 0-100 "percent of total marks" scale so attempts
 // across different mocks (and different exams — SSC CGL's 200 vs GMAT's 64)
 // are comparable on one chart/average. Falls back to accuracy% for the rare
@@ -5699,8 +5744,8 @@ function ProgressView({ attempts, mocksIndex, onBack, onPractice }) {
           <p className="text-xs text-slate-400">{attempts.length} test{attempts.length === 1 ? "" : "s"} attempted on this device</p>
         </div>
         {streak > 0 && (
-          <div className="flex items-center gap-1.5 bg-orange-50 text-orange-700 border border-orange-200 px-3 py-1.5 rounded-full text-xs font-semibold">
-            <Flame size={14} /> {streak}-day streak
+          <div className="streak-badge-in flex items-center gap-1.5 bg-orange-50 text-orange-700 border border-orange-200 px-3 py-1.5 rounded-full text-xs font-semibold">
+            <StreakFlame streak={streak} /> {streak}-day streak
           </div>
         )}
       </header>
