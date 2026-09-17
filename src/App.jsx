@@ -3089,8 +3089,11 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
 
   return (
     <div className="-m-6 min-h-[calc(100vh-49px)] bg-slate-100 flex flex-col">
-      {/* Exam header — deliberately distinct from the admin chrome above it */}
-      <div className="bg-white border-b border-slate-200 px-6 py-3">
+      {/* Exam header — deliberately distinct from the admin chrome above it.
+          Sticky so the timer is genuinely visible at all times regardless
+          of how far the question area is scrolled — this was the actual
+          complaint (the timer scrolling out of view), not just a display bug. */}
+      <div className="sticky top-0 z-20 bg-white border-b border-slate-200 px-6 py-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
             <div className="text-sm font-semibold text-slate-800">{mock.title}</div>
@@ -3195,48 +3198,6 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
                 ))}
               </div>
             </div>
-
-            <div className="flex items-center justify-between mt-5 flex-wrap gap-2">
-              <div className="flex gap-2">
-                <button
-                  disabled={qIdx === 0}
-                  onClick={() => goToQuestion(qIdx - 1)}
-                  className="text-sm px-4 py-2.5 rounded-lg border border-slate-300 text-slate-600 bg-white disabled:opacity-40"
-                >
-                  Previous
-                </button>
-                <button
-                  onClick={clearResponse}
-                  disabled={answers[q.id] === undefined}
-                  className="text-sm px-4 py-2.5 rounded-lg border border-slate-300 text-slate-600 bg-white disabled:opacity-40"
-                >
-                  Clear Response
-                </button>
-              </div>
-              <div className="flex gap-2">
-                <button onClick={saveAndNext} className="text-sm px-5 py-2.5 rounded-lg bg-blue-900 text-white font-medium">
-                  Save &amp; Next
-                </button>
-                <button
-                  disabled={qIdx === list.length - 1}
-                  onClick={() => goToQuestion(qIdx + 1)}
-                  className="text-sm px-4 py-2.5 rounded-lg border border-slate-300 text-slate-600 bg-white disabled:opacity-40"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-
-            <div className="flex justify-center gap-3 mt-6">
-              {!isComposite && (
-                <button onClick={requestNextSection} className="text-sm px-5 py-2.5 rounded-lg border border-slate-300 text-slate-600 bg-white">
-                  {isLastSection ? "Finish exam" : `Next section: ${sections[sectionIdx + 1]?.label}`} →
-                </button>
-              )}
-              <button onClick={requestFinish} className="text-sm px-5 py-2.5 rounded-lg bg-red-600 text-white font-medium">
-                Finish Test
-              </button>
-            </div>
           </div>
         </div>
 
@@ -3303,6 +3264,53 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
               })}
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Sticky action footer — Next/Skip Section/Finish Test used to live
+          inside the scrolling question column, so on a long question they'd
+          scroll out of view along with it. Pinned here, outside any
+          scrolling area, so they're genuinely visible at all times, same as
+          the timer above. */}
+      <div className="sticky bottom-0 z-20 bg-white border-t border-slate-200 px-6 py-3">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex gap-2">
+            <button
+              disabled={qIdx === 0}
+              onClick={() => goToQuestion(qIdx - 1)}
+              className="text-sm px-4 py-2.5 rounded-lg border border-slate-300 text-slate-600 bg-white disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <button
+              onClick={clearResponse}
+              disabled={answers[q.id] === undefined}
+              className="text-sm px-4 py-2.5 rounded-lg border border-slate-300 text-slate-600 bg-white disabled:opacity-40"
+            >
+              Clear Response
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={saveAndNext} className="text-sm px-5 py-2.5 rounded-lg bg-blue-900 text-white font-medium">
+              Save &amp; Next
+            </button>
+            <button
+              disabled={qIdx === list.length - 1}
+              onClick={() => goToQuestion(qIdx + 1)}
+              className="text-sm px-4 py-2.5 rounded-lg border border-slate-300 text-slate-600 bg-white disabled:opacity-40"
+            >
+              Next
+            </button>
+            <span className="w-px h-6 bg-slate-200 mx-1" />
+            {!isComposite && (
+              <button onClick={requestNextSection} className="text-sm px-5 py-2.5 rounded-lg border border-slate-300 text-slate-600 bg-white whitespace-nowrap">
+                {isLastSection ? "Finish exam" : `Next section: ${sections[sectionIdx + 1]?.label}`} →
+              </button>
+            )}
+            <button onClick={requestFinish} className="text-sm px-5 py-2.5 rounded-lg bg-red-600 text-white font-medium whitespace-nowrap">
+              Finish Test
+            </button>
+          </div>
         </div>
       </div>
 
