@@ -3113,7 +3113,11 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
       <div className="shrink-0">
         <div className="bg-blue-800 text-white px-4 sm:px-6 py-2.5 flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2 min-w-0">
-            <img src={logoImg} alt="" className="h-6 w-auto shrink-0 brightness-0 invert" />
+            {/* A vector icon, not the raster logo.png — that image is a
+                detailed multi-element lockup (icon + wordmark + tagline)
+                meant for large display; shrinking it to ~24px plus a color
+                filter blurred it badly. An icon draws crisp at any size. */}
+            <GraduationCap size={20} className="text-white shrink-0" />
             <span className="text-sm font-semibold truncate">{mock.title}</span>
           </div>
           <div className="flex items-center gap-2 shrink-0">
