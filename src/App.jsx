@@ -3195,8 +3195,8 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
             big centered card with generous padding — the goal is every
             option visible at once without scrolling for a normal question,
             not a spacious "modern SaaS" card. */}
-        <div className="flex-1 min-w-0 overflow-auto p-4 flex justify-center">
-          <div className="max-w-2xl w-full">
+        <div className="flex-1 min-w-0 overflow-auto p-4">
+          <div className="max-w-3xl w-full">
             <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-5">
               <div className="flex items-center justify-between mb-3">
                 <div className="text-sm text-slate-400">
