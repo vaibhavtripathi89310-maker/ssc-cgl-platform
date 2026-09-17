@@ -3178,7 +3178,12 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
 
       {/* Main exam body */}
       <div className="flex-1 flex overflow-hidden">
-        <div className="flex-1 overflow-auto p-8 flex justify-center">
+        {/* min-w-0 is the actual fix for the page-wide horizontal scrollbar:
+            a flex child defaults to min-width:auto, so flex-1 alone refuses
+            to shrink this column below its content's natural width (a long
+            question/option) — forcing the whole row, and the page along
+            with it, wider than the viewport instead of just wrapping text. */}
+        <div className="flex-1 min-w-0 overflow-auto p-8 flex justify-center">
           <div className="max-w-2xl w-full">
             <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-8">
               <div className="flex items-center justify-between mb-5">
