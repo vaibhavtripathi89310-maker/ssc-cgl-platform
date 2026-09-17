@@ -6295,7 +6295,7 @@ function NotificationToggle({ userId }) {
   if (!supported || !checked) return null;
 
   return (
-    <div className="flex flex-col items-center gap-1.5 mt-5 mb-6">
+    <div className="flex flex-col items-center gap-1.5 mt-1 mb-3">
       <button
         onClick={toggle}
         disabled={working}
@@ -6603,15 +6603,16 @@ function StudentApp() {
       const Icon = theme.icon;
       const count = publishedMocks.filter((m) => getExamKey(m) === exam.key).length;
       return (
-        <div className="relative min-h-screen overflow-hidden bg-blue-950">
+        <div className="relative min-h-screen lg:h-screen overflow-hidden bg-blue-950">
           <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${examPickerBg})` }} />
           <div className="absolute inset-0 bg-gradient-to-b from-blue-950/70 via-blue-950/55 to-blue-950/90" />
           <GeometricSignInBackground />
-          <div className="relative max-w-2xl mx-auto px-6 py-16 sm:py-24 text-center">
-            <div className="inline-flex items-center gap-1.5 bg-white/10 backdrop-blur text-blue-100 text-xs font-medium px-3 py-1.5 rounded-full mb-6">
+          <div className="relative min-h-screen lg:h-full flex items-center justify-center px-6 py-8">
+          <div className="w-full max-w-2xl mx-auto text-center">
+            <div className="inline-flex items-center gap-1.5 bg-white/10 backdrop-blur text-blue-100 text-xs font-medium px-3 py-1.5 rounded-full mb-4">
               <Sparkles size={13} /> The 100 Percentiler
             </div>
-            <h1 className="text-3xl sm:text-5xl font-bold text-white mb-3 leading-tight">
+            <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2 leading-tight">
               Your <span className="bg-gradient-to-r from-sky-300 via-blue-300 to-indigo-300 bg-clip-text text-transparent">SSC CGL</span> Journey Starts Here
             </h1>
             <p className="text-sm sm:text-base text-blue-200/80 mb-2">
@@ -6622,14 +6623,14 @@ function StudentApp() {
 
             <button
               onClick={() => chooseExam(exam.key)}
-              className="group relative w-full bg-blue-950/50 backdrop-blur-md border-2 border-blue-400/40 rounded-2xl p-7 text-left shadow-[0_0_40px_rgba(59,130,246,0.25)] hover:shadow-[0_0_60px_rgba(59,130,246,0.4)] hover:-translate-y-1 transition-all duration-300"
+              className="group relative w-full bg-blue-950/50 backdrop-blur-md border-2 border-blue-400/40 rounded-2xl p-5 text-left shadow-[0_0_40px_rgba(59,130,246,0.25)] hover:shadow-[0_0_60px_rgba(59,130,246,0.4)] hover:-translate-y-1 transition-all duration-300"
             >
-              <div className="w-14 h-14 rounded-2xl bg-blue-500/10 border border-blue-400/40 flex items-center justify-center mb-4">
-                <Icon size={26} className="text-blue-300" />
+              <div className="w-11 h-11 rounded-2xl bg-blue-500/10 border border-blue-400/40 flex items-center justify-center mb-3">
+                <Icon size={22} className="text-blue-300" />
               </div>
               <h2 className="text-xl font-bold text-white mb-1.5">{exam.label}</h2>
-              <p className="text-sm text-blue-200/70 mb-5">{exam.tagline}</p>
-              <div className="flex flex-wrap gap-1.5 mb-6">
+              <p className="text-sm text-blue-200/70 mb-3">{exam.tagline}</p>
+              <div className="flex flex-wrap gap-1.5 mb-3">
                 {exam.sections.map((s) => (
                   <span key={s.key} className="text-[10px] font-semibold px-2.5 py-1 rounded-full bg-blue-500/10 border border-blue-400/30 text-blue-200">
                     {s.short}
@@ -6646,7 +6647,7 @@ function StudentApp() {
               </div>
             </button>
 
-            <div className="flex items-center justify-center gap-2.5 mt-12 text-[11px] font-semibold uppercase tracking-wider">
+            <div className="flex items-center justify-center gap-2.5 mt-5 text-[11px] font-semibold uppercase tracking-wider">
               <span className="flex items-center gap-1.5 text-blue-200">
                 <span className="w-2 h-2 rounded-full bg-blue-300" /> Explore Tests
               </span>
@@ -6659,6 +6660,7 @@ function StudentApp() {
                 <span className="w-2 h-2 rounded-full border border-blue-400/40" /> See Your Results
               </span>
             </div>
+          </div>
           </div>
         </div>
       );
@@ -7041,61 +7043,6 @@ function PhoneNumberGate() {
 // syllabus-topic listing here anymore; that read as cluttered and forced a
 // second row of cards below the fold). Every chip below maps to a real,
 // shipped capability — nothing here is a stat or a feature we haven't built.
-// Small ascending line-chart used on the exam-picker hero (the screen right
-// after sign-in) — the line draws itself in (stroke-dash reveal), the area
-// fill fades in behind it, and each point pops in roughly as the line
-// reaches it, ending with a soft pulsing glow on the last point.
-// Deliberately carries no axis labels or numbers: it's visual energy about
-// "things trending up," never a stat or claim.
-function GrowthChartAnimation() {
-  const points = [
-    [24, 88],
-    [150, 62],
-    [270, 46],
-    [376, 20],
-  ];
-  return (
-    <div className="relative w-full max-w-md mx-auto mb-6 rounded-xl border border-blue-400/20 bg-blue-950/40 backdrop-blur p-3 pb-2 overflow-hidden growth-chart-card">
-      <div className="growth-chart-grid absolute inset-3 rounded-lg" aria-hidden="true" />
-      <svg viewBox="0 0 400 110" className="relative w-full h-auto block" aria-hidden="true">
-        <defs>
-          <linearGradient id="growthLineGrad" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="#38bdf8" />
-            <stop offset="100%" stopColor="#a5b4fc" />
-          </linearGradient>
-          <linearGradient id="growthAreaGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.35" />
-            <stop offset="100%" stopColor="#38bdf8" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <path
-          d="M24,88 C90,86 95,66 150,62 C205,58 215,50 270,46 C320,42 335,26 376,20 L376,100 L24,100 Z"
-          fill="url(#growthAreaGrad)"
-          className="growth-chart-area"
-        />
-        <path
-          d="M24,88 C90,86 95,66 150,62 C205,58 215,50 270,46 C320,42 335,26 376,20"
-          fill="none"
-          stroke="url(#growthLineGrad)"
-          strokeWidth="3.5"
-          strokeLinecap="round"
-          className="growth-chart-line"
-        />
-        {points.map(([cx, cy], i) => (
-          <circle
-            key={i}
-            cx={cx}
-            cy={cy}
-            r={i === points.length - 1 ? 6 : 4.5}
-            fill={i === points.length - 1 ? "#e0f2fe" : "#bae6fd"}
-            className={`growth-chart-dot growth-chart-dot-${i}${i === points.length - 1 ? " growth-chart-dot-final" : ""}`}
-          />
-        ))}
-      </svg>
-    </div>
-  );
-}
-
 function SSCSyllabusShowcase() {
   const features = [
     { icon: Clock, label: "Real Exam-Pattern Mocks", desc: "Timed tests matching the actual exam format" },
@@ -7143,6 +7090,62 @@ function SSCSyllabusShowcase() {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// Small ascending line-chart used on the exam-picker hero (the screen right
+// after sign-in) — the line draws itself in (stroke-dash reveal), the area
+// fill fades in behind it, and each point pops in roughly as the line
+// reaches it, ending with a soft pulsing glow on the last point.
+// Deliberately carries no axis labels or numbers: it's visual energy about
+// "things trending up," never a stat or claim. Kept flat/short (viewBox
+// height 80, not 110) so this hero still fits one screen with no scrolling.
+function GrowthChartAnimation() {
+  const points = [
+    [24, 64],
+    [150, 45],
+    [270, 33],
+    [376, 15],
+  ];
+  return (
+    <div className="relative w-full max-w-md mx-auto mb-3 rounded-xl border border-blue-400/20 bg-blue-950/40 backdrop-blur p-2 pb-1 overflow-hidden growth-chart-card">
+      <div className="growth-chart-grid absolute inset-2 rounded-lg" aria-hidden="true" />
+      <svg viewBox="0 0 400 80" className="relative w-full h-auto block" aria-hidden="true">
+        <defs>
+          <linearGradient id="growthLineGrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#38bdf8" />
+            <stop offset="100%" stopColor="#a5b4fc" />
+          </linearGradient>
+          <linearGradient id="growthAreaGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.35" />
+            <stop offset="100%" stopColor="#38bdf8" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path
+          d="M24,64 C90,62 95,48 150,45 C205,42 215,36 270,33 C320,30 335,19 376,15 L376,73 L24,73 Z"
+          fill="url(#growthAreaGrad)"
+          className="growth-chart-area"
+        />
+        <path
+          d="M24,64 C90,62 95,48 150,45 C205,42 215,36 270,33 C320,30 335,19 376,15"
+          fill="none"
+          stroke="url(#growthLineGrad)"
+          strokeWidth="3.5"
+          strokeLinecap="round"
+          className="growth-chart-line"
+        />
+        {points.map(([cx, cy], i) => (
+          <circle
+            key={i}
+            cx={cx}
+            cy={cy}
+            r={i === points.length - 1 ? 6 : 4.5}
+            fill={i === points.length - 1 ? "#e0f2fe" : "#bae6fd"}
+            className={`growth-chart-dot growth-chart-dot-${i}${i === points.length - 1 ? " growth-chart-dot-final" : ""}`}
+          />
+        ))}
+      </svg>
     </div>
   );
 }
