@@ -3102,64 +3102,76 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
     // combination. Fixed height + overflow-hidden avoids that class of bug
     // entirely rather than fighting it.)
     <div className="-m-6 h-[calc(100vh-49px)] bg-slate-100 flex flex-col overflow-hidden">
-      {/* Exam header — deliberately distinct from the admin chrome above it. */}
-      <div className="bg-white border-b border-slate-200 px-6 py-3 shrink-0">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <div>
-            <div className="text-sm font-semibold text-slate-800">{mock.title}</div>
-            <div className="text-xs text-slate-400">{currentSectionLabel}</div>
+      {/* Exam header — styled after the real proctored-exam software look
+          (Oliveboard/NTA-style blue bar) rather than generic app chrome, so
+          it reads as "this is the actual test" rather than "this is a
+          website about a test". */}
+      <div className="shrink-0">
+        <div className="bg-blue-800 text-white px-4 sm:px-6 py-2.5 flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <img src={logoImg} alt="" className="h-6 w-auto shrink-0 brightness-0 invert" />
+            <span className="text-sm font-semibold truncate">{mock.title}</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             {!timerHidden && (
-              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-mono text-base font-semibold tabular-nums ${isLowTime ? "bg-red-50 text-red-600" : "bg-blue-50 text-blue-700"}`}>
-                <Clock size={16} /> {formatTime(timeLeft)}
+              <div
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded font-mono text-sm font-bold tabular-nums ${
+                  isLowTime ? "bg-red-500 text-white" : "bg-white/15 text-white"
+                }`}
+              >
+                <Clock size={14} /> Time Left: {formatTime(timeLeft)}
               </div>
             )}
             <button
               onClick={() => setTimerHidden((h) => !h)}
               title="Toggle timer visibility — useful for practice or screen recording"
-              className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 text-slate-500"
+              className="text-xs px-2.5 py-1.5 rounded border border-white/30 text-white/90 hover:bg-white/10"
             >
               {timerHidden ? "Show timer" : "Hide timer"}
             </button>
           </div>
         </div>
-        {sections.length > 1 && (
-          <div className="flex gap-1.5 flex-wrap mt-3">
-            {sections.map((s, i) =>
-              isComposite ? (
-                // No lock in composite mode — every section tab is always
-                // clickable, jumping straight to that section's first
-                // question, matching the real exam's free navigation.
-                <button
-                  key={s.key}
-                  onClick={() => goToQuestion(sectionOffsets[s.key])}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-colors ${
-                    q?._sectionKey === s.key
-                      ? "bg-blue-900 text-white border-blue-900"
-                      : "bg-slate-50 text-slate-500 border-slate-200 hover:border-blue-300"
-                  }`}
-                >
-                  {s.label}
-                </button>
-              ) : (
-                <div
-                  key={s.key}
-                  title={i < sectionIdx ? "Locked — already submitted, cannot return" : undefined}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium border ${
-                    i === sectionIdx
-                      ? "bg-blue-900 text-white border-blue-900"
-                      : i < sectionIdx
-                      ? "bg-slate-100 text-slate-400 border-slate-200 line-through"
-                      : "bg-slate-50 text-slate-400 border-slate-200"
-                  }`}
-                >
-                  {s.label}
-                </div>
-              )
-            )}
-          </div>
-        )}
+        <div className="bg-white border-b border-slate-200 px-4 sm:px-6 py-2 flex items-center justify-between flex-wrap gap-2">
+          <span className="text-xs font-medium text-slate-500">
+            You are viewing <span className="text-slate-800 font-semibold">{currentSectionLabel}</span>
+          </span>
+          {sections.length > 1 && (
+            <div className="flex gap-1.5 flex-wrap">
+              {sections.map((s, i) =>
+                isComposite ? (
+                  // No lock in composite mode — every section tab is always
+                  // clickable, jumping straight to that section's first
+                  // question, matching the real exam's free navigation.
+                  <button
+                    key={s.key}
+                    onClick={() => goToQuestion(sectionOffsets[s.key])}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-colors ${
+                      q?._sectionKey === s.key
+                        ? "bg-blue-900 text-white border-blue-900"
+                        : "bg-slate-50 text-slate-500 border-slate-200 hover:border-blue-300"
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ) : (
+                  <div
+                    key={s.key}
+                    title={i < sectionIdx ? "Locked — already submitted, cannot return" : undefined}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium border ${
+                      i === sectionIdx
+                        ? "bg-blue-900 text-white border-blue-900"
+                        : i < sectionIdx
+                        ? "bg-slate-100 text-slate-400 border-slate-200 line-through"
+                        : "bg-slate-50 text-slate-400 border-slate-200"
+                    }`}
+                  >
+                    {s.label}
+                  </div>
+                )
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {toast && <div className="shrink-0 bg-amber-50 border-b border-amber-200 text-amber-800 text-sm px-6 py-2">{toast}</div>}
@@ -3217,6 +3229,7 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
             Question {qIdx + 1} / {list.length} · {currentSectionLabel}
           </div>
 
+          <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1.5">Legend</div>
           <div className="grid grid-cols-2 gap-1.5 text-[11px] mb-4">
             <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-emerald-500" /> Answered ({answeredCount})</div>
             <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-red-100 border border-red-200" /> Not answered ({notAnsweredCount})</div>
@@ -3224,6 +3237,7 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
             <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-purple-500" /> Marked ({markedCount})</div>
           </div>
 
+          <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1.5">Question Palette</div>
           {isComposite ? (
             // Grouped by section (for orientation) but every tile is always
             // clickable — no lock, matching the real exam's free navigation.
