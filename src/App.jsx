@@ -3088,20 +3088,24 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
   const notAnsweredCount = list.filter((qq) => visited[qq.id] && answers[qq.id] === undefined && !marked[qq.id]).length;
 
   return (
-    // Fixed height (not min-height) + overflow-hidden is the actual fix for
-    // "the timer scrolls out of view": with only a min-height, this
-    // container could grow taller than the viewport, so the ADMIN chrome's
-    // own scrolling area would scroll the whole thing — header included —
-    // right along with the question content. Capping the height and
-    // clipping overflow here means only the middle row (question column +
-    // sidebar) can ever scroll; the header and footer below are normal,
-    // non-sticky flow children that simply never move.
-    // (position: sticky was tried here first and looked broken inside the
-    // admin preview specifically — negative margins on an ancestor of a
-    // sticky element inside a padded, scrolling container is a known fragile
-    // combination. Fixed height + overflow-hidden avoids that class of bug
-    // entirely rather than fighting it.)
-    <div className="-m-6 h-[calc(100vh-49px)] bg-slate-100 flex flex-col overflow-hidden">
+    // Fixed height (not min-height) + overflow-hidden is what keeps the
+    // header/footer genuinely on screen at all times: with only a
+    // min-height, this container could grow taller than the viewport, so
+    // whatever wraps it would scroll the whole thing — header included —
+    // right along with the question content. Capping the height means only
+    // the middle row (question column + sidebar) can ever scroll; the
+    // header and footer are normal, non-sticky flow children that simply
+    // never move.
+    //
+    // No negative margin here on purpose, even though the admin preview's
+    // own <main> has padding around it — that padding is dropped at the
+    // source (see `view === "run"` in AdminPanel's <main> className)
+    // instead of being cancelled with a -m-6 here. A negative margin on a
+    // child of an overflow:auto ancestor is unreliable: the sliver poking
+    // above/left into where the padding used to be can end up outside the
+    // browser's computed scrollable area and render clipped, with no way
+    // to scroll up to see it — that's what caused the half-cut-off timer.
+    <div className="h-[calc(100vh-49px)] bg-slate-100 flex flex-col overflow-hidden">
       {/* Exam header — styled after the real proctored-exam software look
           (Oliveboard/NTA-style blue bar) rather than generic app chrome, so
           it reads as "this is the actual test" rather than "this is a
@@ -4400,7 +4404,16 @@ function AdminPanel() {
           </h1>
         </header>
 
-        <main className="flex-1 p-6 overflow-auto print:overflow-visible print:h-auto print:p-0">
+        {/* No padding while running a mock: RunMockView used to cancel this
+            padding itself with a negative margin (-m-6) to bleed edge-to-
+            edge, but a negative margin on a child of an overflow:auto
+            ancestor is unreliable — the portion poking above/left into
+            where the padding used to be can end up outside the browser's
+            computed "scrollable area" and render clipped, with no way to
+            scroll up to see it (exactly the half-cut-off timer bar bug).
+            Dropping the padding at the source instead of fighting it after
+            the fact avoids that whole class of bug. */}
+        <main className={`flex-1 overflow-auto print:overflow-visible print:h-auto print:p-0 ${view === "run" ? "" : "p-6"}`}>
           {view === "dashboard" && (
             <DashboardView mocksIndex={mocksIndex} questionCounts={questionsCache} onGoList={goList} onCreateNew={createMock} />
           )}
