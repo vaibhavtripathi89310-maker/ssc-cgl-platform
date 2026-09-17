@@ -3191,10 +3191,14 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
             to shrink this column below its content's natural width (a long
             question/option) — forcing the whole row, and the page along
             with it, wider than the viewport instead of just wrapping text. */}
-        <div className="flex-1 min-w-0 overflow-auto p-8 flex justify-center">
+        {/* Compact, top-left-anchored layout (Oliveboard-style) instead of a
+            big centered card with generous padding — the goal is every
+            option visible at once without scrolling for a normal question,
+            not a spacious "modern SaaS" card. */}
+        <div className="flex-1 min-w-0 overflow-auto p-4 flex justify-center">
           <div className="max-w-2xl w-full">
-            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-8">
-              <div className="flex items-center justify-between mb-5">
+            <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-5">
+              <div className="flex items-center justify-between mb-3">
                 <div className="text-sm text-slate-400">
                   Question <span className="font-semibold text-slate-700">{qIdx + 1}</span> of {list.length}
                 </div>
@@ -3208,21 +3212,21 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
                 </button>
               </div>
 
-              <p className="text-lg leading-relaxed text-slate-900 mb-8 font-medium"><MathText text={q.text} /></p>
+              <p className="text-base leading-relaxed text-slate-900 mb-4 font-medium"><MathText text={q.text} /></p>
 
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {q.options.map((opt, i) => (
                   <button
                     key={i}
                     onClick={() => selectOption(i)}
-                    className={`w-full flex items-center gap-3 text-left px-5 py-3.5 rounded-xl border-2 text-base transition-colors ${
+                    className={`w-full flex items-center gap-3 text-left px-4 py-2.5 rounded-lg border text-sm transition-colors ${
                       answers[q.id] === i
                         ? "border-blue-600 bg-blue-50 text-blue-900"
                         : "border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50"
                     }`}
                   >
                     <span
-                      className={`w-7 h-7 shrink-0 rounded-full flex items-center justify-center text-sm font-semibold ${
+                      className={`w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-xs font-semibold ${
                         answers[q.id] === i ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-500"
                       }`}
                     >
