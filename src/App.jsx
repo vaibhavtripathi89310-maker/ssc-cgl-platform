@@ -3235,6 +3235,41 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
                   </button>
                 ))}
               </div>
+
+              {/* Right under the options, not a page-wide footer — after
+                  picking an answer, "Save & Next" needs to be a short move
+                  away, not a long cursor trip to the far bottom-right of a
+                  wide screen. */}
+              <div className="flex items-center justify-between flex-wrap gap-2 mt-4 pt-4 border-t border-slate-100">
+                <div className="flex gap-2">
+                  <button
+                    disabled={qIdx === 0}
+                    onClick={() => goToQuestion(qIdx - 1)}
+                    className="text-sm px-4 py-2.5 rounded-lg border border-slate-300 text-slate-600 bg-white disabled:opacity-40"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    onClick={clearResponse}
+                    disabled={answers[q.id] === undefined}
+                    className="text-sm px-4 py-2.5 rounded-lg border border-slate-300 text-slate-600 bg-white disabled:opacity-40"
+                  >
+                    Clear Response
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={saveAndNext} className="text-sm px-5 py-2.5 rounded-lg bg-blue-900 text-white font-medium">
+                    Save &amp; Next
+                  </button>
+                  <button
+                    disabled={qIdx === list.length - 1}
+                    onClick={() => goToQuestion(qIdx + 1)}
+                    className="text-sm px-4 py-2.5 rounded-lg border border-slate-300 text-slate-600 bg-white disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -3316,44 +3351,6 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
             )}
             <button onClick={requestFinish} className="w-full text-sm px-4 py-2.5 rounded-lg bg-red-600 text-white font-medium">
               Finish Test
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Action footer — sticky to the bottom of the scrolling ancestor, so
-          it sits right after the content when that content is short
-          (no forced empty gap above it) but still can't be scrolled out of
-          view if a question is ever long. Next Section/Finish Test live in
-          the sidebar, not here — see the palette, under the question grid. */}
-      <div className="sticky bottom-0 z-20 bg-white border-t border-slate-200 px-6 py-3">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <div className="flex gap-2">
-            <button
-              disabled={qIdx === 0}
-              onClick={() => goToQuestion(qIdx - 1)}
-              className="text-sm px-4 py-2.5 rounded-lg border border-slate-300 text-slate-600 bg-white disabled:opacity-40"
-            >
-              Previous
-            </button>
-            <button
-              onClick={clearResponse}
-              disabled={answers[q.id] === undefined}
-              className="text-sm px-4 py-2.5 rounded-lg border border-slate-300 text-slate-600 bg-white disabled:opacity-40"
-            >
-              Clear Response
-            </button>
-          </div>
-          <div className="flex items-center gap-2">
-            <button onClick={saveAndNext} className="text-sm px-5 py-2.5 rounded-lg bg-blue-900 text-white font-medium">
-              Save &amp; Next
-            </button>
-            <button
-              disabled={qIdx === list.length - 1}
-              onClick={() => goToQuestion(qIdx + 1)}
-              className="text-sm px-4 py-2.5 rounded-lg border border-slate-300 text-slate-600 bg-white disabled:opacity-40"
-            >
-              Next
             </button>
           </div>
         </div>
