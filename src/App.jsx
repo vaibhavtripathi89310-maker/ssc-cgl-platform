@@ -6328,6 +6328,26 @@ function StudentApp() {
   const [practiceGroundSection, setPracticeGroundSection] = useState(null); // one of exam.sections, chosen first
   const [practiceGroundSelection, setPracticeGroundSelection] = useState(null); // { topic, difficulty }
   const [pendingGatedMock, setPendingGatedMock] = useState(null); // a mock blocked by the free-tier limit, resumed once phone is given
+
+  // Cursor-tilt on the single-exam hero's CTA card — written straight to the
+  // DOM node's style on every mousemove (never through React state), the
+  // same "skip the render cycle" trick GeometricSignInBackground uses, so
+  // the tilt tracks the cursor at 60fps with no re-renders.
+  const examCtaCardRef = useRef(null);
+  const handleExamCtaTilt = useCallback((e) => {
+    const el = examCtaCardRef.current;
+    if (!el || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const rect = el.getBoundingClientRect();
+    const px = (e.clientX - rect.left) / rect.width;
+    const py = (e.clientY - rect.top) / rect.height;
+    const rotateY = (px - 0.5) * 8;
+    const rotateX = (0.5 - py) * 8;
+    el.style.transform = `perspective(900px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateY(-3px)`;
+  }, []);
+  const resetExamCtaTilt = useCallback(() => {
+    const el = examCtaCardRef.current;
+    if (el) el.style.transform = "";
+  }, []);
   // Global admin-controlled switch (see PracticeBankView) — hidden by
   // default (and while still loading) so it never flashes on and then
   // disappears; only ever shown once we've confirmed it's actually on.
@@ -6609,21 +6629,27 @@ function StudentApp() {
           <GeometricSignInBackground />
           <div className="relative min-h-screen lg:h-full flex items-center justify-center px-6 py-8">
           <div className="w-full max-w-2xl mx-auto text-center">
-            <div className="inline-flex items-center gap-1.5 bg-white/10 backdrop-blur text-blue-100 text-xs font-medium px-3 py-1.5 rounded-full mb-4">
+            <div className="hero-stagger inline-flex items-center gap-1.5 bg-white/10 backdrop-blur text-blue-100 text-xs font-medium px-3 py-1.5 rounded-full mb-4" style={{ animationDelay: "0s" }}>
               <Sparkles size={13} /> The 100 Percentiler
             </div>
-            <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2 leading-tight">
+            <h1 className="hero-stagger text-3xl sm:text-4xl font-bold text-white mb-2 leading-tight" style={{ animationDelay: "0.08s" }}>
               Your <span className="bg-gradient-to-r from-sky-300 via-blue-300 to-indigo-300 bg-clip-text text-transparent">SSC CGL</span> Journey Starts Here
             </h1>
-            <p className="text-sm sm:text-base text-blue-200/80 mb-2">
+            <p className="hero-stagger text-sm sm:text-base text-blue-200/80 mb-2" style={{ animationDelay: "0.16s" }}>
               {publishedMocks.length} mock test{publishedMocks.length === 1 ? "" : "s"} live and ready — jump in and get started.
             </p>
             <GrowthChartAnimation />
-            <NotificationToggle userId={studentSession?.userId} />
+            <div className="hero-stagger" style={{ animationDelay: "0.34s" }}>
+              <NotificationToggle userId={studentSession?.userId} />
+            </div>
 
             <button
+              ref={examCtaCardRef}
               onClick={() => chooseExam(exam.key)}
-              className="group relative w-full bg-blue-950/50 backdrop-blur-md border-2 border-blue-400/40 rounded-2xl p-5 text-left shadow-[0_0_40px_rgba(59,130,246,0.25)] hover:shadow-[0_0_60px_rgba(59,130,246,0.4)] hover:-translate-y-1 transition-all duration-300"
+              onMouseMove={handleExamCtaTilt}
+              onMouseLeave={resetExamCtaTilt}
+              className="hero-stagger cta-tilt group relative w-full bg-blue-950/50 backdrop-blur-md border-2 border-blue-400/40 rounded-2xl p-5 text-left shadow-[0_0_40px_rgba(59,130,246,0.25)] hover:shadow-[0_0_60px_rgba(59,130,246,0.4)]"
+              style={{ animationDelay: "0.42s" }}
             >
               <div className="w-11 h-11 rounded-2xl bg-blue-500/10 border border-blue-400/40 flex items-center justify-center mb-3">
                 <Icon size={22} className="text-blue-300" />
@@ -6647,7 +6673,7 @@ function StudentApp() {
               </div>
             </button>
 
-            <div className="flex items-center justify-center gap-2.5 mt-5 text-[11px] font-semibold uppercase tracking-wider">
+            <div className="hero-stagger flex items-center justify-center gap-2.5 mt-5 text-[11px] font-semibold uppercase tracking-wider" style={{ animationDelay: "0.52s" }}>
               <span className="flex items-center gap-1.5 text-blue-200">
                 <span className="w-2 h-2 rounded-full bg-blue-300" /> Explore Tests
               </span>
@@ -7102,9 +7128,23 @@ function SSCSyllabusShowcase() {
 // glow. No axis labels or numbers — it's a "your prep, before and after"
 // motif, not a stat or claim. Kept flat/short (viewBox height 80) so this
 // hero still fits one screen with no scrolling.
+// Tiny colored flecks that burst outward from the marker point the instant
+// it pops in — pure CSS via a per-particle --dx/--dy/--rot custom property
+// consumed by growthConfettiBurst in index.css.
+const GROWTH_CHART_CONFETTI = [
+  { dx: -14, dy: -6, rot: 15, color: "#fbbf24" },
+  { dx: -8, dy: -14, rot: -20, color: "#38bdf8" },
+  { dx: 2, dy: -16, rot: 40, color: "#e0f2fe" },
+  { dx: 10, dy: -13, rot: -35, color: "#a5b4fc" },
+  { dx: 14, dy: -4, rot: 25, color: "#fbbf24" },
+  { dx: 10, dy: 8, rot: -10, color: "#38bdf8" },
+  { dx: -2, dy: 12, rot: 50, color: "#e0f2fe" },
+  { dx: -12, dy: 7, rot: -45, color: "#a5b4fc" },
+];
+
 function GrowthChartAnimation() {
   return (
-    <div className="relative w-full max-w-md mx-auto mb-3 rounded-xl border border-blue-400/20 bg-blue-950/40 backdrop-blur p-2 pb-1 overflow-hidden growth-chart-card">
+    <div className="relative w-full max-w-md mx-auto mb-3 rounded-xl border border-blue-400/20 bg-blue-950/40 backdrop-blur p-2 pb-1 overflow-hidden hero-stagger" style={{ animationDelay: "0.24s" }}>
       <div className="growth-chart-grid absolute inset-2 rounded-lg" aria-hidden="true" />
       <svg viewBox="0 0 400 80" className="relative w-full h-auto block" aria-hidden="true">
         <defs>
@@ -7131,13 +7171,39 @@ function GrowthChartAnimation() {
           strokeLinejoin="round"
           className="growth-chart-line"
         />
+        {/* A small glowing "comet" (plus 3 dimmer, smaller trailing copies)
+            travels along the exact same path as the line draw, arriving
+            right as the stroke-dash reveal finishes — motion via CSS
+            offset-path, kept in sync with growth-chart-line's own timing.
+            offset-path here must stay identical to the line's `d` above if
+            that shape ever changes. */}
+        <circle r="1.1" fill="#7dd3fc" fillOpacity="0.15" className="growth-chart-comet growth-chart-comet-t3" />
+        <circle r="1.7" fill="#7dd3fc" fillOpacity="0.32" className="growth-chart-comet growth-chart-comet-t2" />
+        <circle r="2.4" fill="#7dd3fc" fillOpacity="0.55" className="growth-chart-comet growth-chart-comet-t1" />
+        <circle r="3.2" fill="#ffffff" className="growth-chart-comet growth-chart-comet-head" />
         {/* The "You joined" marker — a vertical guideline + label pinned at
             the flat-to-steep kink, timed to pop in exactly as the line
             reaches x=150 (roughly 35% along the path). Before this point the
             line is a noisy, roughly-flat wobble; right after, it climbs
             steeply (also noisy, real-looking, not a smooth curve) — that
-            contrast is the whole point. */}
+            contrast is the whole point. A little confetti burst fires the
+            instant the marker lands. */}
         <line x1="150" y1="21" x2="150" y2="77" className="growth-chart-guideline" />
+        <g>
+          {GROWTH_CHART_CONFETTI.map((c, i) => (
+            <rect
+              key={i}
+              x="148.8"
+              y="65.3"
+              width="2.4"
+              height="1.4"
+              rx="0.4"
+              fill={c.color}
+              className="growth-chart-confetti-piece"
+              style={{ "--dx": c.dx, "--dy": c.dy, "--rot": `${c.rot}deg`, animationDelay: `${1.0 + i * 0.02}s` }}
+            />
+          ))}
+        </g>
         <circle cx="150" cy="66" r="5" fill="#fbbf24" className="growth-chart-marker-dot" />
         <g className="growth-chart-pill">
           <rect x="68" y="2" width="164" height="16" rx="8" fill="#0c1b3d" stroke="#fbbf24" strokeOpacity="0.4" />

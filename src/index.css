@@ -188,13 +188,6 @@ body {
    hand-tuned to roughly when the stroke-dash reveal (0.4s start, 1.8s
    duration) passes each x position along the path.
    ============================================================================ */
-.growth-chart-card {
-  animation: growthCardIn 0.6s ease-out both;
-}
-@keyframes growthCardIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
 .growth-chart-grid {
   background-image:
     repeating-linear-gradient(0deg, rgba(148,163,184,0.14) 0, rgba(148,163,184,0.14) 1px, transparent 1px, transparent 33.33%),
@@ -266,13 +259,83 @@ body {
   0%, 100% { filter: drop-shadow(0 0 3px rgba(224,242,254,0.7)); }
   50% { filter: drop-shadow(0 0 12px rgba(224,242,254,1)); }
 }
+/* Comet + 3 dimmer/smaller trailing copies riding the same path as
+   growth-chart-line via CSS motion path, arriving right as the stroke-dash
+   reveal finishes. offset-path must be kept identical to that path's `d`. */
+.growth-chart-comet {
+  offset-path: path("M24,72 L50,70 L75,71 L100,68 L125,69 L150,66 L175,58 L200,50 L225,53 L250,40 L275,32 L300,22 L325,26 L350,12 L376,2");
+  offset-rotate: 0deg;
+  opacity: 0;
+  animation-duration: 1.8s;
+  animation-timing-function: cubic-bezier(0.65, 0, 0.35, 1);
+  animation-fill-mode: forwards;
+  animation-name: growthCometMove;
+}
+.growth-chart-comet-head { animation-delay: 0.40s; filter: drop-shadow(0 0 4px rgba(255,255,255,0.9)); }
+.growth-chart-comet-t1 { animation-delay: 0.45s; }
+.growth-chart-comet-t2 { animation-delay: 0.50s; }
+.growth-chart-comet-t3 { animation-delay: 0.55s; }
+@keyframes growthCometMove {
+  0% { offset-distance: 0%; opacity: 1; }
+  90% { offset-distance: 94%; opacity: 1; }
+  100% { offset-distance: 100%; opacity: 0; }
+}
+/* Confetti flecks bursting outward from the marker the instant it lands —
+   each piece's travel direction comes from its own --dx/--dy/--rot custom
+   property (set inline per-particle in GrowthChartAnimation). */
+.growth-chart-confetti-piece {
+  transform-origin: center;
+  transform-box: fill-box;
+  opacity: 0;
+  animation: growthConfettiBurst 0.7s ease-out forwards;
+}
+@keyframes growthConfettiBurst {
+  0% { transform: translate(0, 0) rotate(0deg) scale(1); opacity: 1; }
+  55% { opacity: 1; }
+  100% { transform: translate(calc(var(--dx) * 1px), calc(var(--dy) * 1px)) rotate(var(--rot)) scale(0.4); opacity: 0; }
+}
 @media (prefers-reduced-motion: reduce) {
-  .growth-chart-card, .growth-chart-line, .growth-chart-area, .growth-chart-guideline,
-  .growth-chart-marker-dot, .growth-chart-pill, .growth-chart-dot-final {
+  .growth-chart-line, .growth-chart-area, .growth-chart-guideline,
+  .growth-chart-marker-dot, .growth-chart-pill, .growth-chart-dot-final,
+  .growth-chart-comet, .growth-chart-confetti-piece {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;
     stroke-dashoffset: 0 !important;
+  }
+  .growth-chart-comet { display: none; }
+}
+
+/* ============================================================================
+   EXAM-PICKER HERO — STAGGERED ENTRANCE + CTA CARD TILT
+   Each top-level element in the hero (badge, headline, paragraph, chart,
+   notify toggle, CTA card, step trail) fades/slides up in sequence via its
+   own animation-delay, instead of all appearing at once. The CTA card also
+   tracks the cursor with a subtle 3D tilt (see examCtaCardRef/
+   handleExamCtaTilt in App.jsx — written straight to the DOM node's style,
+   never through React state, so it stays smooth at 60fps).
+   ============================================================================ */
+.hero-stagger {
+  opacity: 0;
+  animation: heroFadeUp 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@keyframes heroFadeUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.cta-tilt {
+  transition: transform 0.15s ease-out, box-shadow 0.3s, border-color 0.3s;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-stagger {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .cta-tilt {
+    transition: box-shadow 0.3s, border-color 0.3s;
   }
 }
 
