@@ -7,6 +7,119 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
+/* Countdown ring next to "Time Left: mm:ss" in RunMockView's header (see
+   RadialTimerRing in App.jsx). The transition makes the once-a-second
+   re-render read as a smooth continuous drain instead of a jump; the pulse
+   only kicks in once isLowTime is true (<=60s left). */
+.timer-ring-progress {
+  transition: stroke-dashoffset 1s linear, stroke 0.3s ease;
+}
+.timer-ring-pulse {
+  animation: timerRingPulse 1s ease-in-out infinite;
+}
+@keyframes timerRingPulse {
+  0%, 100% { filter: drop-shadow(0 0 0 rgba(248, 113, 113, 0)); }
+  50% { filter: drop-shadow(0 0 5px rgba(248, 113, 113, 0.9)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .timer-ring-progress { transition: stroke 0.3s ease; }
+  .timer-ring-pulse { animation: none; }
+}
+
+/* Results screen "new personal best" celebration (see PersonalBestConfetti/
+   ScoreCounter in App.jsx) — confetti flecks fall from just above the score,
+   each piece's path set by its own --dx/--dy/--rot custom property. */
+.results-confetti-piece {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 7px;
+  height: 11px;
+  border-radius: 1.5px;
+  opacity: 0;
+  animation: resultsConfettiBurst 1.1s ease-out forwards;
+}
+@keyframes resultsConfettiBurst {
+  0% { transform: translate(0, 0) rotate(0deg) scale(1); opacity: 1; }
+  45% { transform: translate(calc(var(--dx) * 0.55px), calc(var(--dy) * 0.25px)) rotate(calc(var(--rot) * 0.4deg)) scale(1); opacity: 1; }
+  100% { transform: translate(calc(var(--dx) * 1px), calc(var(--dy) * 1px)) rotate(calc(var(--rot) * 1deg)) scale(0.5); opacity: 0; }
+}
+.results-pb-badge {
+  animation: resultsPbBadgeIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes resultsPbBadgeIn {
+  from { opacity: 0; transform: scale(0.6); }
+  to { opacity: 1; transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .results-confetti-piece { display: none; }
+  .results-pb-badge { animation: none; }
+}
+
+/* Student-facing screen transitions — exam picker -> mock list ->
+   instructions -> test. Each StudentApp view branch's root gets a
+   `key={view}` so React actually remounts (not just re-renders) on a view
+   change, which is what makes this replay every time instead of only once. */
+.view-transition {
+  animation: viewFadeIn 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes viewFadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .view-transition {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+/* Tactile press feedback for the highest-frequency buttons in the app (mock
+   answer options, Previous/Save & Next/Next, Finish Test, sign-in) — a
+   quick scale-down on press, not just a hover state, so clicking feels like
+   pressing something real. */
+.press-feedback {
+  transition: transform 0.12s ease;
+}
+.press-feedback:active {
+  transform: scale(0.96);
+}
+@media (prefers-reduced-motion: reduce) {
+  .press-feedback:active { transform: none; }
+}
+
+/* The mock-run "time's up, moving to next section" banner (RunMockView) —
+   springs down into place instead of just appearing. */
+.toast-spring-in {
+  animation: toastSpringIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes toastSpringIn {
+  from { opacity: 0; transform: translateY(-100%); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast-spring-in { animation: none; }
+}
+
+/* Shared full-screen loading state (AppLoadingScreen in App.jsx) — a small
+   spinner instead of bare "Loading..." text, used wherever the app is
+   waiting on an auth/session check or the initial mock list fetch. */
+.loading-ring {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 3px solid rgba(59, 130, 246, 0.15);
+  border-top-color: #3b82f6;
+  animation: loadingSpin 0.7s linear infinite;
+}
+@keyframes loadingSpin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .loading-ring { animation: loadingSpin 1.6s linear infinite; }
+}
+
 /* Handwritten-style corner annotations on the sign-in hero — decorative
    typography only, never used for a claim/stat that needs to be true. */
 .font-handwritten {

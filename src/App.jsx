@@ -438,6 +438,19 @@ function formatTime(totalSec) {
   return `${m}:${s}`;
 }
 
+// Shared full-screen loading state — a small spinner instead of bare
+// "Loading..." text, used wherever the app is waiting on an auth/session
+// check or the initial mock list fetch (StudentSessionProvider, AdminGate,
+// StudentApp's first load).
+function AppLoadingScreen({ label = "Loading..." }) {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-sm text-slate-400">
+      <div className="loading-ring" aria-hidden="true" />
+      {label}
+    </div>
+  );
+}
+
 // A short, quiet synthesized "tick" for deliberate clicks on interactive
 // results-screen elements (tab switches, etc.) — generated in-browser via
 // the Web Audio API rather than an embedded/hosted audio file, so there's
@@ -2399,6 +2412,36 @@ function EditableUsername({ value, onSave }) {
   );
 }
 
+// Small ring that visually drains as timeLeft counts down, next to the
+// "Time Left: mm:ss" text in RunMockView's header. The stroke-dashoffset
+// change is transitioned in CSS (see .timer-ring-progress) so it depletes
+// smoothly between the once-a-second re-renders, rather than jumping.
+function RadialTimerRing({ timeLeft, total, isLowTime }) {
+  const size = 22;
+  const r = 8.5;
+  const c = size / 2;
+  const circumference = 2 * Math.PI * r;
+  const fraction = total > 0 ? Math.max(0, Math.min(1, timeLeft / total)) : 0;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0" aria-hidden="true">
+      <circle cx={c} cy={c} r={r} fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="2.5" />
+      <circle
+        cx={c}
+        cy={c}
+        r={r}
+        fill="none"
+        stroke={isLowTime ? "#fecaca" : "#ffffff"}
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeDasharray={circumference}
+        strokeDashoffset={circumference * (1 - fraction)}
+        transform={`rotate(-90 ${c} ${c})`}
+        className={`timer-ring-progress ${isLowTime ? "timer-ring-pulse" : ""}`}
+      />
+    </svg>
+  );
+}
+
 // ============================================================================
 // RUN MOCK — an actual timed, section-locked attempt, using this mock's real
 // questions. Distinct from PreviewView: no answers shown, real countdown per
@@ -2478,6 +2521,10 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
   const currentSectionLabel = isComposite ? q?._sectionLabel || sections[0]?.label : section?.label;
   const isLastSection = sectionIdx === sections.length - 1;
   const perSectionSeconds = Math.round((mock.duration / sections.length) * 60);
+  // Denominator for the countdown ring — same value timeLeft was initialized
+  // from, and the same value it resets to on a section change, so it never
+  // needs to change mid-run.
+  const timerTotalSeconds = isComposite ? Math.round(mock.duration * 60) : perSectionSeconds;
 
   useEffect(() => {
     if (q) setVisited((v) => (v[q.id] ? v : { ...v, [q.id]: true }));
@@ -2663,6 +2710,7 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
   // attempted this same mock. Best-effort: if Supabase is briefly
   // unreachable, the results screen still works, just without a percentile.
   const [percentile, setPercentile] = useState(null);
+  const [isPersonalBest, setIsPersonalBest] = useState(false);
   const [leaderboard, setLeaderboard] = useState([]);
   const [leaderboardNames, setLeaderboardNames] = useState({});
   const [myAttemptId, setMyAttemptId] = useState(null);
@@ -2694,6 +2742,15 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
         const rows = await loadMockScores(mock.id); // [{id, score, userId}], best first
         const better = rows.filter((r) => r.score < score).length;
         setPercentile(rows.length > 1 ? Math.round((better / rows.length) * 100) : null);
+        // A real personal-best check against this student's own prior
+        // attempts at this exact mock (excluding the one just saved) — never
+        // shown unless it's actually true.
+        if (studentSession?.userId) {
+          const priorScores = rows.filter((r) => r.userId === studentSession.userId && r.id !== attemptId).map((r) => r.score);
+          // Only a retake can set a "new" personal best — a first-ever
+          // attempt has nothing to beat yet, so it doesn't count.
+          setIsPersonalBest(priorScores.length > 0 && score > Math.max(...priorScores));
+        }
         const topRows = rows.slice(0, 5);
         setLeaderboard(topRows);
         loadUsernamesByIds(topRows.map((r) => r.userId))
@@ -2792,6 +2849,7 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
             incorrect={incorrect}
             skipped={skipped}
             percentile={percentile}
+            isPersonalBest={isPersonalBest}
             sectionBreakdown={sectionBreakdown}
             sections={sections}
             onExit={onExit}
@@ -3124,7 +3182,8 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
                   isLowTime ? "bg-red-500 text-white" : "bg-white/15 text-white"
                 }`}
               >
-                <Clock size={14} /> Time Left: {formatTime(timeLeft)}
+                <RadialTimerRing timeLeft={timeLeft} total={timerTotalSeconds} isLowTime={isLowTime} />
+                Time Left: {formatTime(timeLeft)}
               </div>
             )}
             <button
@@ -3179,7 +3238,11 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
         </div>
       </div>
 
-      {toast && <div className="shrink-0 bg-amber-50 border-b border-amber-200 text-amber-800 text-sm px-6 py-2">{toast}</div>}
+      {toast && (
+        <div key={toast} className="toast-spring-in shrink-0 bg-amber-50 border-b border-amber-200 text-amber-800 text-sm px-6 py-2">
+          {toast}
+        </div>
+      )}
 
       {/* Main exam body — natural height (no flex-1/overflow-hidden): the
           page itself scrolls now if content is ever taller than the
@@ -3218,7 +3281,7 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
                   <button
                     key={i}
                     onClick={() => selectOption(i)}
-                    className={`w-full flex items-center gap-3 text-left px-4 py-2.5 rounded-lg border text-sm transition-colors ${
+                    className={`press-feedback w-full flex items-center gap-3 text-left px-4 py-2.5 rounded-lg border text-sm transition-colors ${
                       answers[q.id] === i
                         ? "border-blue-600 bg-blue-50 text-blue-900"
                         : "border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50"
@@ -3245,26 +3308,26 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
                   <button
                     disabled={qIdx === 0}
                     onClick={() => goToQuestion(qIdx - 1)}
-                    className="text-sm px-4 py-2.5 rounded-lg border border-slate-300 text-slate-600 bg-white disabled:opacity-40"
+                    className="press-feedback text-sm px-4 py-2.5 rounded-lg border border-slate-300 text-slate-600 bg-white disabled:opacity-40"
                   >
                     Previous
                   </button>
                   <button
                     onClick={clearResponse}
                     disabled={answers[q.id] === undefined}
-                    className="text-sm px-4 py-2.5 rounded-lg border border-slate-300 text-slate-600 bg-white disabled:opacity-40"
+                    className="press-feedback text-sm px-4 py-2.5 rounded-lg border border-slate-300 text-slate-600 bg-white disabled:opacity-40"
                   >
                     Clear Response
                   </button>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button onClick={saveAndNext} className="text-sm px-5 py-2.5 rounded-lg bg-blue-900 text-white font-medium">
+                  <button onClick={saveAndNext} className="press-feedback text-sm px-5 py-2.5 rounded-lg bg-blue-900 text-white font-medium">
                     Save &amp; Next
                   </button>
                   <button
                     disabled={qIdx === list.length - 1}
                     onClick={() => goToQuestion(qIdx + 1)}
-                    className="text-sm px-4 py-2.5 rounded-lg border border-slate-300 text-slate-600 bg-white disabled:opacity-40"
+                    className="press-feedback text-sm px-4 py-2.5 rounded-lg border border-slate-300 text-slate-600 bg-white disabled:opacity-40"
                   >
                     Next
                   </button>
@@ -3349,7 +3412,7 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
                 {isLastSection ? "Finish exam" : `Next section: ${sections[sectionIdx + 1]?.label}`} →
               </button>
             )}
-            <button onClick={requestFinish} className="w-full text-sm px-4 py-2.5 rounded-lg bg-red-600 text-white font-medium">
+            <button onClick={requestFinish} className="press-feedback w-full text-sm px-4 py-2.5 rounded-lg bg-red-600 text-white font-medium">
               Finish Test
             </button>
           </div>
@@ -4351,7 +4414,7 @@ function AdminPanel() {
   ];
 
   if (!mocksLoaded) {
-    return <div className="min-h-screen flex items-center justify-center text-sm text-slate-400">Loading admin panel...</div>;
+    return <AppLoadingScreen label="Loading admin panel..." />;
   }
 
   return (
@@ -4819,7 +4882,71 @@ function AnswerBreakdownDonut({ attempts, caption = "questions answered across a
 // click-to-jump into Answer Review, unchanged); picking a section swaps the
 // same content area to that section's accuracy/pie/breakdown instead, with
 // a fade transition and a soft click sound on every tab change.
-function ResultsHero({ mock, score, correct, incorrect, skipped, percentile, sectionBreakdown, sections, onExit, onJumpReview }) {
+// Confetti flecks bursting from the score, only when this is an actual new
+// personal best (see isPersonalBest in RunMockView) — never fires on a
+// first-ever attempt or a repeat of an old best. Each particle's fall path
+// comes from its own --dx/--dy/--rot custom property.
+const RESULTS_CONFETTI = [
+  { dx: -70, dy: 90, rot: -120, color: "#fbbf24", delay: 0 },
+  { dx: -40, dy: 130, rot: 200, color: "#38bdf8", delay: 0.03 },
+  { dx: -10, dy: 100, rot: -80, color: "#6ee7b7", delay: 0.06 },
+  { dx: 20, dy: 140, rot: 160, color: "#fda4af", delay: 0.02 },
+  { dx: 55, dy: 95, rot: -150, color: "#fbbf24", delay: 0.08 },
+  { dx: 80, dy: 125, rot: 90, color: "#a5b4fc", delay: 0.05 },
+  { dx: -85, dy: 60, rot: 60, color: "#38bdf8", delay: 0.1 },
+  { dx: 90, dy: 65, rot: -60, color: "#6ee7b7", delay: 0.01 },
+  { dx: -25, dy: 150, rot: 40, color: "#fda4af", delay: 0.12 },
+  { dx: 35, dy: 110, rot: -200, color: "#a5b4fc", delay: 0.07 },
+  { dx: -55, dy: 105, rot: 130, color: "#fbbf24", delay: 0.14 },
+  { dx: 65, dy: 145, rot: -40, color: "#38bdf8", delay: 0.09 },
+];
+
+function PersonalBestConfetti() {
+  return (
+    <div className="absolute left-1/2 top-4 w-0 h-0" aria-hidden="true">
+      {RESULTS_CONFETTI.map((p, i) => (
+        <span
+          key={i}
+          className="results-confetti-piece"
+          style={{ "--dx": p.dx, "--dy": p.dy, "--rot": `${p.rot}deg`, backgroundColor: p.color, animationDelay: `${p.delay}s` }}
+        />
+      ))}
+    </div>
+  );
+}
+
+// Counts up from 0 to the real, already-computed score over ~1.1s — the
+// number itself is never fabricated, just revealed with some motion instead
+// of appearing instantly. Skips the animation under prefers-reduced-motion.
+function ScoreCounter({ value }) {
+  const [display, setDisplay] = useState(
+    typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? value : 0
+  );
+  useEffect(() => {
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      setDisplay(value);
+      return;
+    }
+    let raf;
+    const duration = 1100;
+    const start = performance.now();
+    function tick(now) {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      if (t >= 1) {
+        setDisplay(value);
+        return;
+      }
+      setDisplay(Math.round(value * eased * 100) / 100);
+      raf = requestAnimationFrame(tick);
+    }
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value]);
+  return <>{display}</>;
+}
+
+function ResultsHero({ mock, score, correct, incorrect, skipped, percentile, isPersonalBest, sectionBreakdown, sections, onExit, onJumpReview }) {
   const [tab, setTab] = useState("overall");
   const sectionIdx = sections.findIndex((s) => s.key === tab);
   const isSectionTab = sectionIdx >= 0;
@@ -4876,15 +5003,23 @@ function ResultsHero({ mock, score, correct, incorrect, skipped, percentile, sec
           {!isSectionTab ? (
             <>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 items-end mb-2">
-                <div className="col-span-2 sm:col-span-1">
-                  <div className="text-4xl sm:text-5xl font-bold cursor-default hover:scale-105 transition-transform duration-200 inline-block">
-                    {score} <span className="text-lg font-normal text-blue-300">/ {mock.totalMarks}</span>
+                <div className="col-span-2 sm:col-span-1 relative">
+                  {isPersonalBest && <PersonalBestConfetti />}
+                  <div className="text-4xl sm:text-5xl font-bold cursor-default hover:scale-105 transition-transform duration-200 inline-block tabular-nums">
+                    <ScoreCounter value={score} /> <span className="text-lg font-normal text-blue-300">/ {mock.totalMarks}</span>
                   </div>
-                  {percentile !== null && (
-                    <div className="inline-block mt-2 bg-white/15 text-white text-xs font-medium px-3 py-1 rounded-full">
-                      Better than {percentile}% of students
-                    </div>
-                  )}
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                    {percentile !== null && (
+                      <div className="inline-block bg-white/15 text-white text-xs font-medium px-3 py-1 rounded-full">
+                        Better than {percentile}% of students
+                      </div>
+                    )}
+                    {isPersonalBest && (
+                      <div className="results-pb-badge inline-flex items-center gap-1 bg-amber-400/20 border border-amber-300/40 text-amber-200 text-xs font-semibold px-3 py-1 rounded-full">
+                        <Trophy size={12} /> New personal best
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <button onClick={() => correct > 0 && onJumpReview("correct")} disabled={correct === 0} className="text-left disabled:cursor-default group">
                   <div className="text-3xl font-bold text-emerald-300 group-hover:scale-110 transition-transform duration-200 inline-block">{correct}</div>
@@ -5705,7 +5840,7 @@ function WeakTopicPracticeView({ topics, onExit }) {
   }
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center text-sm text-slate-400">Loading practice questions...</div>;
+    return <AppLoadingScreen label="Loading practice questions..." />;
   }
   if (list.length === 0) {
     return (
@@ -6120,7 +6255,7 @@ function PracticeGroundRunView({ examKey, sectionKey, topic, difficulty, onExit 
   }
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center text-sm text-slate-400">Loading practice questions...</div>;
+    return <AppLoadingScreen label="Loading practice questions..." />;
   }
   if (list.length === 0) {
     return (
@@ -6536,13 +6671,17 @@ function StudentApp() {
   }
 
   if (!loaded) {
-    return <div className="min-h-screen flex items-center justify-center text-sm text-slate-400">Loading available tests...</div>;
+    return <AppLoadingScreen label="Loading available tests..." />;
   }
 
   if (view === "run" && selectedMock && selectedQuestions) {
     // The exact same RunMockView the Admin Panel's "Run Mock" button uses —
     // no second engine, no reimplementation of timer/scoring/palette logic.
-    return <RunMockView mock={selectedMock} questions={selectedQuestions} onExit={backToList} />;
+    return (
+      <div key="run" className="view-transition">
+        <RunMockView mock={selectedMock} questions={selectedQuestions} onExit={backToList} />
+      </div>
+    );
   }
 
   if (view === "progress") {
@@ -6598,7 +6737,7 @@ function StudentApp() {
     const sections = sectionsForMock(selectedMock);
     const questionCount = sections.reduce((sum, s) => sum + (selectedQuestions[s.key]?.length || 0), 0);
     return (
-      <div className="min-h-screen bg-slate-50 p-6">
+      <div key="instructions" className="view-transition min-h-screen bg-slate-50 p-6">
         <StudentInstructionsView
           mock={selectedMock}
           questionCount={questionCount}
@@ -6623,7 +6762,7 @@ function StudentApp() {
       const Icon = theme.icon;
       const count = publishedMocks.filter((m) => getExamKey(m) === exam.key).length;
       return (
-        <div className="relative min-h-screen lg:h-screen overflow-hidden bg-blue-950">
+        <div key="exam" className="view-transition relative min-h-screen lg:h-screen overflow-hidden bg-blue-950">
           <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${examPickerBg})` }} />
           <div className="absolute inset-0 bg-gradient-to-b from-blue-950/70 via-blue-950/55 to-blue-950/90" />
           <GeometricSignInBackground />
@@ -6693,7 +6832,7 @@ function StudentApp() {
     }
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50">
+      <div key="exam" className="view-transition min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50">
         <div className="relative overflow-hidden bg-gradient-to-br from-blue-950 via-blue-900 to-indigo-900 text-white px-6 py-16 sm:py-20">
           <div className="absolute -right-20 -top-20 w-80 h-80 bg-blue-400/20 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute -left-16 -bottom-20 w-72 h-72 bg-indigo-400/20 rounded-full blur-3xl pointer-events-none" />
@@ -6908,7 +7047,7 @@ function StudentApp() {
     const exam = EXAMS[examFilter] || EXAMS[DEFAULT_EXAM];
     const theme = EXAM_THEME[exam.key];
     return (
-      <div className="relative min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 overflow-hidden">
+      <div key="list" className="view-transition relative min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 overflow-hidden">
         <AmbientOrbBackground />
         <div className={`relative overflow-hidden bg-gradient-to-br ${theme.gradient} text-white px-6 py-10 sm:py-14`}>
           <div className="absolute -right-16 -top-16 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
@@ -7526,7 +7665,7 @@ function StudentGate({ children }) {
   }
 
   if (session === undefined) {
-    return <div className="min-h-screen flex items-center justify-center text-sm text-slate-400">Loading...</div>;
+    return <AppLoadingScreen label="Loading..." />;
   }
 
   if (!session) {
@@ -7567,7 +7706,7 @@ function StudentGate({ children }) {
               <p className="text-base text-blue-200/80 mb-6">Sign in with Google to take mock tests and practice questions.</p>
               <button
                 onClick={() => signInWithGoogle()}
-                className="w-full flex items-center justify-center gap-2 bg-white border border-white/50 text-slate-700 text-base font-medium rounded-lg py-3 hover:shadow-[0_0_20px_rgba(255,255,255,0.4)] hover:-translate-y-0.5 transition-all"
+                className="press-feedback w-full flex items-center justify-center gap-2 bg-white border border-white/50 text-slate-700 text-base font-medium rounded-lg py-3 hover:shadow-[0_0_20px_rgba(255,255,255,0.4)] hover:-translate-y-0.5 transition-all"
               >
                 Continue with Google
               </button>
@@ -7593,7 +7732,7 @@ function StudentGate({ children }) {
   }
 
   if (!profileLoaded) {
-    return <div className="min-h-screen flex items-center justify-center text-sm text-slate-400">Loading...</div>;
+    return <AppLoadingScreen label="Loading..." />;
   }
 
   return (
@@ -7666,7 +7805,7 @@ function AdminGate({ children }) {
   }
 
   if (session === undefined || (session && isAdmin === undefined)) {
-    return <div className="min-h-screen flex items-center justify-center text-sm text-slate-400">Loading...</div>;
+    return <AppLoadingScreen label="Loading..." />;
   }
 
   if (session && isAdmin) return children;
@@ -7933,7 +8072,7 @@ function ChallengeFlow({ code }) {
   }
 
   if (state === "loading") {
-    return <div className="min-h-screen flex items-center justify-center text-sm text-slate-400">Loading challenge...</div>;
+    return <AppLoadingScreen label="Loading challenge..." />;
   }
 
   if (state === "not-found") {
