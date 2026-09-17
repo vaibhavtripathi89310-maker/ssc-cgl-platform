@@ -3211,7 +3211,7 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
                 </button>
               </div>
 
-              <p className="text-base leading-relaxed text-slate-900 mb-4 font-medium"><MathText text={q.text} /></p>
+              <p className="text-lg leading-relaxed text-slate-900 mb-4 font-medium"><MathText text={q.text} /></p>
 
               <div className="space-y-2">
                 {q.options.map((opt, i) => (
