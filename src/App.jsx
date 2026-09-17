@@ -7118,12 +7118,12 @@ function GrowthChartAnimation() {
           </linearGradient>
         </defs>
         <path
-          d="M24,70 C70,69 110,65 150,62 C230,52 300,18 376,4 L376,76 L24,76 Z"
+          d="M24,72 C90,71.7 130,68.5 150,68 C165,57 215,12 376,2 L376,77 L24,77 Z"
           fill="url(#growthAreaGrad)"
           className="growth-chart-area"
         />
         <path
-          d="M24,70 C70,69 110,65 150,62 C230,52 300,18 376,4"
+          d="M24,72 C90,71.7 130,68.5 150,68 C165,57 215,12 376,2"
           fill="none"
           stroke="url(#growthLineGrad)"
           strokeWidth="3.5"
@@ -7132,9 +7132,11 @@ function GrowthChartAnimation() {
         />
         {/* The "You joined" marker — a vertical guideline + label pinned at
             the flat-to-steep kink, timed to pop in exactly as the line
-            reaches x=150 (roughly 35% along the path). */}
-        <line x1="150" y1="21" x2="150" y2="76" className="growth-chart-guideline" />
-        <circle cx="150" cy="62" r="5" fill="#fbbf24" className="growth-chart-marker-dot" />
+            reaches x=150 (roughly 35% along the path). Before this point the
+            line is almost flat; right after, it jumps up sharply — that
+            contrast is the whole point, not a smooth curve. */}
+        <line x1="150" y1="21" x2="150" y2="77" className="growth-chart-guideline" />
+        <circle cx="150" cy="68" r="5" fill="#fbbf24" className="growth-chart-marker-dot" />
         <g className="growth-chart-pill">
           <rect x="68" y="2" width="164" height="16" rx="8" fill="#0c1b3d" stroke="#fbbf24" strokeOpacity="0.4" />
           <text x="150" y="10.5" textAnchor="middle" dominantBaseline="middle" fontSize="8.5" fontWeight="600" fill="#fde68a">
