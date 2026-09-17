@@ -177,6 +177,70 @@ body {
   }
 }
 
+/* ============================================================================
+   SIGN-IN SCREEN — GROWTH CHART
+   Small ascending line-chart animation (SignInGrowthChart in App.jsx): the
+   line draws itself with a stroke-dash reveal, the area fill fades in behind
+   it, and each point pops in roughly as the line reaches it, ending with a
+   pulsing glow on the final point. Pure CSS, timed to feel like one
+   continuous sequence rather than separate effects firing at once.
+   ============================================================================ */
+.growth-chart-card {
+  animation: growthCardIn 0.6s ease-out both;
+}
+@keyframes growthCardIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.growth-chart-grid {
+  background-image:
+    repeating-linear-gradient(0deg, rgba(148,163,184,0.14) 0, rgba(148,163,184,0.14) 1px, transparent 1px, transparent 33.33%),
+    repeating-linear-gradient(90deg, rgba(148,163,184,0.14) 0, rgba(148,163,184,0.14) 1px, transparent 1px, transparent 25%);
+}
+.growth-chart-line {
+  stroke-dasharray: 520;
+  stroke-dashoffset: 520;
+  animation: growthDraw 1.8s 0.4s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+  filter: drop-shadow(0 0 6px rgba(56,189,248,0.6));
+}
+@keyframes growthDraw {
+  to { stroke-dashoffset: 0; }
+}
+.growth-chart-area {
+  opacity: 0;
+  animation: growthAreaIn 1s ease-out 1.9s forwards;
+}
+@keyframes growthAreaIn {
+  to { opacity: 1; }
+}
+.growth-chart-dot {
+  opacity: 0;
+  transform-origin: center;
+  transform-box: fill-box;
+  transform: scale(0);
+  animation: growthDotIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+.growth-chart-dot-0 { animation-delay: 0.5s; }
+.growth-chart-dot-1 { animation-delay: 1.05s; }
+.growth-chart-dot-2 { animation-delay: 1.6s; }
+.growth-chart-dot-final {
+  animation:
+    growthDotIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 2.15s forwards,
+    growthPulse 2s ease-in-out 2.7s infinite;
+}
+@keyframes growthPulse {
+  0%, 100% { filter: drop-shadow(0 0 3px rgba(224,242,254,0.7)); }
+  50% { filter: drop-shadow(0 0 12px rgba(224,242,254,1)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .growth-chart-card, .growth-chart-line, .growth-chart-area, .growth-chart-dot, .growth-chart-dot-final {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    stroke-dashoffset: 0 !important;
+  }
+}
+
 /* PDF export (results screen "Download PDF") is just the browser's own
    print-to-PDF — no library. Browsers strip background colors/badges by
    default when printing unless told otherwise, which would flatten every

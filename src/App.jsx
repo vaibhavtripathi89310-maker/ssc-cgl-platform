@@ -7040,6 +7040,60 @@ function PhoneNumberGate() {
 // syllabus-topic listing here anymore; that read as cluttered and forced a
 // second row of cards below the fold). Every chip below maps to a real,
 // shipped capability — nothing here is a stat or a feature we haven't built.
+// Small ascending line-chart on the sign-in hero — the line draws itself in
+// (stroke-dash reveal), the area fill fades in behind it, and each point
+// pops in roughly as the line reaches it, ending with a soft pulsing glow on
+// the last point. Deliberately carries no axis labels or numbers: it's
+// visual energy about "things trending up," never a stat or claim.
+function SignInGrowthChart() {
+  const points = [
+    [24, 88],
+    [150, 62],
+    [270, 46],
+    [376, 20],
+  ];
+  return (
+    <div className="hidden lg:block relative w-full max-w-lg mb-5 rounded-xl border border-blue-400/20 bg-blue-950/40 backdrop-blur p-3 pb-2 overflow-hidden growth-chart-card">
+      <div className="growth-chart-grid absolute inset-3 rounded-lg" aria-hidden="true" />
+      <svg viewBox="0 0 400 110" className="relative w-full h-auto block" aria-hidden="true">
+        <defs>
+          <linearGradient id="growthLineGrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#38bdf8" />
+            <stop offset="100%" stopColor="#a5b4fc" />
+          </linearGradient>
+          <linearGradient id="growthAreaGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.35" />
+            <stop offset="100%" stopColor="#38bdf8" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path
+          d="M24,88 C90,86 95,66 150,62 C205,58 215,50 270,46 C320,42 335,26 376,20 L376,100 L24,100 Z"
+          fill="url(#growthAreaGrad)"
+          className="growth-chart-area"
+        />
+        <path
+          d="M24,88 C90,86 95,66 150,62 C205,58 215,50 270,46 C320,42 335,26 376,20"
+          fill="none"
+          stroke="url(#growthLineGrad)"
+          strokeWidth="3.5"
+          strokeLinecap="round"
+          className="growth-chart-line"
+        />
+        {points.map(([cx, cy], i) => (
+          <circle
+            key={i}
+            cx={cx}
+            cy={cy}
+            r={i === points.length - 1 ? 6 : 4.5}
+            fill={i === points.length - 1 ? "#e0f2fe" : "#bae6fd"}
+            className={`growth-chart-dot growth-chart-dot-${i}${i === points.length - 1 ? " growth-chart-dot-final" : ""}`}
+          />
+        ))}
+      </svg>
+    </div>
+  );
+}
+
 function SSCSyllabusShowcase() {
   const features = [
     { icon: Clock, label: "Real Exam-Pattern Mocks", desc: "Timed tests matching the actual exam format" },
@@ -7069,10 +7123,11 @@ function SSCSyllabusShowcase() {
         Not Just Mock Tests.<br />
         <span className="bg-gradient-to-r from-sky-300 via-blue-300 to-indigo-300 bg-clip-text text-transparent">AI-Powered</span> Exam Prep.
       </h1>
-      <p className="text-base text-blue-200/80 max-w-md mb-7">
+      <p className="text-base text-blue-200/80 max-w-md mb-5">
         Real exam-pattern mocks, topic-wise practice mapped to the actual syllabus, and deep performance
         analysis after every attempt — all in one place.
       </p>
+      <SignInGrowthChart />
       <div className="grid grid-cols-2 gap-3 max-w-lg">
         {features.map((f) => (
           <div
