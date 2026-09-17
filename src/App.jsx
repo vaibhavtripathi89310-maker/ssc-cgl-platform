@@ -3195,7 +3195,7 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
             option visible at once without scrolling for a normal question,
             not a spacious "modern SaaS" card. */}
         <div className="flex-1 min-w-0 p-4">
-          <div className="max-w-3xl w-full">
+          <div className="w-full">
             <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-5">
               <div className="flex items-center justify-between mb-3">
                 <div className="text-sm text-slate-400">
