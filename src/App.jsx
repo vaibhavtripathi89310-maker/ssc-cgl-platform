@@ -6617,6 +6617,7 @@ function StudentApp() {
             <p className="text-sm sm:text-base text-blue-200/80 mb-2">
               {publishedMocks.length} mock test{publishedMocks.length === 1 ? "" : "s"} live and ready — jump in and get started.
             </p>
+            <GrowthChartAnimation />
             <NotificationToggle userId={studentSession?.userId} />
 
             <button
@@ -7040,12 +7041,13 @@ function PhoneNumberGate() {
 // syllabus-topic listing here anymore; that read as cluttered and forced a
 // second row of cards below the fold). Every chip below maps to a real,
 // shipped capability — nothing here is a stat or a feature we haven't built.
-// Small ascending line-chart on the sign-in hero — the line draws itself in
-// (stroke-dash reveal), the area fill fades in behind it, and each point
-// pops in roughly as the line reaches it, ending with a soft pulsing glow on
-// the last point. Deliberately carries no axis labels or numbers: it's
-// visual energy about "things trending up," never a stat or claim.
-function SignInGrowthChart() {
+// Small ascending line-chart used on the exam-picker hero (the screen right
+// after sign-in) — the line draws itself in (stroke-dash reveal), the area
+// fill fades in behind it, and each point pops in roughly as the line
+// reaches it, ending with a soft pulsing glow on the last point.
+// Deliberately carries no axis labels or numbers: it's visual energy about
+// "things trending up," never a stat or claim.
+function GrowthChartAnimation() {
   const points = [
     [24, 88],
     [150, 62],
@@ -7053,7 +7055,7 @@ function SignInGrowthChart() {
     [376, 20],
   ];
   return (
-    <div className="hidden lg:block relative w-full max-w-lg mb-5 rounded-xl border border-blue-400/20 bg-blue-950/40 backdrop-blur p-3 pb-2 overflow-hidden growth-chart-card">
+    <div className="relative w-full max-w-md mx-auto mb-6 rounded-xl border border-blue-400/20 bg-blue-950/40 backdrop-blur p-3 pb-2 overflow-hidden growth-chart-card">
       <div className="growth-chart-grid absolute inset-3 rounded-lg" aria-hidden="true" />
       <svg viewBox="0 0 400 110" className="relative w-full h-auto block" aria-hidden="true">
         <defs>
@@ -7123,11 +7125,10 @@ function SSCSyllabusShowcase() {
         Not Just Mock Tests.<br />
         <span className="bg-gradient-to-r from-sky-300 via-blue-300 to-indigo-300 bg-clip-text text-transparent">AI-Powered</span> Exam Prep.
       </h1>
-      <p className="text-base text-blue-200/80 max-w-md mb-5">
+      <p className="text-base text-blue-200/80 max-w-md mb-7">
         Real exam-pattern mocks, topic-wise practice mapped to the actual syllabus, and deep performance
         analysis after every attempt — all in one place.
       </p>
-      <SignInGrowthChart />
       <div className="grid grid-cols-2 gap-3 max-w-lg">
         {features.map((f) => (
           <div
