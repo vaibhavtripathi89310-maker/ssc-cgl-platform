@@ -3088,29 +3088,26 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
   const notAnsweredCount = list.filter((qq) => visited[qq.id] && answers[qq.id] === undefined && !marked[qq.id]).length;
 
   return (
-    // Fixed height (not min-height) + overflow-hidden is what keeps the
-    // header/footer genuinely on screen at all times: with only a
-    // min-height, this container could grow taller than the viewport, so
-    // whatever wraps it would scroll the whole thing — header included —
-    // right along with the question content. Capping the height means only
-    // the middle row (question column + sidebar) can ever scroll; the
-    // header and footer are normal, non-sticky flow children that simply
-    // never move.
+    // Natural height, not a viewport-filling forced height — a short
+    // question used to leave a big dead gray gap because the layout
+    // always stretched to exactly fill the screen regardless of content.
+    // The page now just sizes to its actual content, and scrolls as a
+    // whole (via the admin preview's own <main>, or the browser itself for
+    // students) if a question is ever long enough to need it.
     //
-    // No negative margin here on purpose, even though the admin preview's
-    // own <main> has padding around it — that padding is dropped at the
-    // source (see `view === "run"` in AdminPanel's <main> className)
-    // instead of being cancelled with a -m-6 here. A negative margin on a
-    // child of an overflow:auto ancestor is unreliable: the sliver poking
-    // above/left into where the padding used to be can end up outside the
-    // browser's computed scrollable area and render clipped, with no way
-    // to scroll up to see it — that's what caused the half-cut-off timer.
-    <div className="h-[calc(100vh-49px)] bg-slate-100 flex flex-col overflow-hidden">
+    // The header and footer stay reachable during that scroll via
+    // position: sticky, not by capping this container's height — sticky
+    // works reliably here because there's no negative margin fighting it
+    // (the admin preview's own padding is dropped at the source instead,
+    // see `view === "run"` in AdminPanel's <main> className; a negative
+    // margin on a child of an overflow:auto ancestor is what caused the
+    // earlier half-cut-off timer bug).
+    <div className="bg-slate-100 flex flex-col">
       {/* Exam header — styled after the real proctored-exam software look
           (Oliveboard/NTA-style blue bar) rather than generic app chrome, so
           it reads as "this is the actual test" rather than "this is a
           website about a test". */}
-      <div className="shrink-0">
+      <div className="sticky top-0 z-20">
         <div className="bg-blue-800 text-white px-4 sm:px-6 py-2.5 flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2 min-w-0">
             {/* A vector icon, not the raster logo.png — that image is a
@@ -3184,8 +3181,10 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
 
       {toast && <div className="shrink-0 bg-amber-50 border-b border-amber-200 text-amber-800 text-sm px-6 py-2">{toast}</div>}
 
-      {/* Main exam body */}
-      <div className="flex-1 flex overflow-hidden">
+      {/* Main exam body — natural height (no flex-1/overflow-hidden): the
+          page itself scrolls now if content is ever taller than the
+          viewport, rather than this row being forced to fill it. */}
+      <div className="flex">
         {/* min-w-0 is the actual fix for the page-wide horizontal scrollbar:
             a flex child defaults to min-width:auto, so flex-1 alone refuses
             to shrink this column below its content's natural width (a long
@@ -3195,7 +3194,7 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
             big centered card with generous padding — the goal is every
             option visible at once without scrolling for a normal question,
             not a spacious "modern SaaS" card. */}
-        <div className="flex-1 min-w-0 overflow-auto p-4">
+        <div className="flex-1 min-w-0 p-4">
           <div className="max-w-3xl w-full">
             <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-5">
               <div className="flex items-center justify-between mb-3">
@@ -3241,7 +3240,7 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
         </div>
 
         {/* Question palette sidebar */}
-        <div className="w-64 bg-white border-l border-slate-200 p-5 overflow-auto shrink-0">
+        <div className="w-64 bg-white border-l border-slate-200 p-5 shrink-0">
           <div className="text-xs font-semibold text-slate-500 mb-3">
             Question {qIdx + 1} / {list.length} · {currentSectionLabel}
           </div>
@@ -3322,12 +3321,12 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
         </div>
       </div>
 
-      {/* Action footer — a normal (non-sticky) flow child that never moves
-          because the root container above has a fixed height + overflow
-          hidden, so it can't be pushed off-screen by scrolling content.
-          Next Section/Finish Test live in the sidebar now, not here — see
-          the palette below, right under the question-number grid. */}
-      <div className="shrink-0 bg-white border-t border-slate-200 px-6 py-3">
+      {/* Action footer — sticky to the bottom of the scrolling ancestor, so
+          it sits right after the content when that content is short
+          (no forced empty gap above it) but still can't be scrolled out of
+          view if a question is ever long. Next Section/Finish Test live in
+          the sidebar, not here — see the palette, under the question grid. */}
+      <div className="sticky bottom-0 z-20 bg-white border-t border-slate-200 px-6 py-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex gap-2">
             <button
