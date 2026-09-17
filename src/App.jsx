@@ -3088,12 +3088,22 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
   const notAnsweredCount = list.filter((qq) => visited[qq.id] && answers[qq.id] === undefined && !marked[qq.id]).length;
 
   return (
-    <div className="-m-6 min-h-[calc(100vh-49px)] bg-slate-100 flex flex-col">
-      {/* Exam header — deliberately distinct from the admin chrome above it.
-          Sticky so the timer is genuinely visible at all times regardless
-          of how far the question area is scrolled — this was the actual
-          complaint (the timer scrolling out of view), not just a display bug. */}
-      <div className="sticky top-0 z-20 bg-white border-b border-slate-200 px-6 py-3">
+    // Fixed height (not min-height) + overflow-hidden is the actual fix for
+    // "the timer scrolls out of view": with only a min-height, this
+    // container could grow taller than the viewport, so the ADMIN chrome's
+    // own scrolling area would scroll the whole thing — header included —
+    // right along with the question content. Capping the height and
+    // clipping overflow here means only the middle row (question column +
+    // sidebar) can ever scroll; the header and footer below are normal,
+    // non-sticky flow children that simply never move.
+    // (position: sticky was tried here first and looked broken inside the
+    // admin preview specifically — negative margins on an ancestor of a
+    // sticky element inside a padded, scrolling container is a known fragile
+    // combination. Fixed height + overflow-hidden avoids that class of bug
+    // entirely rather than fighting it.)
+    <div className="-m-6 h-[calc(100vh-49px)] bg-slate-100 flex flex-col overflow-hidden">
+      {/* Exam header — deliberately distinct from the admin chrome above it. */}
+      <div className="bg-white border-b border-slate-200 px-6 py-3 shrink-0">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
             <div className="text-sm font-semibold text-slate-800">{mock.title}</div>
@@ -3152,7 +3162,7 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
         )}
       </div>
 
-      {toast && <div className="bg-amber-50 border-b border-amber-200 text-amber-800 text-sm px-6 py-2">{toast}</div>}
+      {toast && <div className="shrink-0 bg-amber-50 border-b border-amber-200 text-amber-800 text-sm px-6 py-2">{toast}</div>}
 
       {/* Main exam body */}
       <div className="flex-1 flex overflow-hidden">
@@ -3264,15 +3274,29 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
               })}
             </div>
           )}
+
+          {/* Right below the question grid, per how this is meant to read:
+              the palette tells you where you are, these tell you how to
+              leave. */}
+          <div className="flex flex-col gap-2 mt-5">
+            {!isComposite && (
+              <button onClick={requestNextSection} className="w-full text-sm px-4 py-2.5 rounded-lg border border-slate-300 text-slate-600 bg-white">
+                {isLastSection ? "Finish exam" : `Next section: ${sections[sectionIdx + 1]?.label}`} →
+              </button>
+            )}
+            <button onClick={requestFinish} className="w-full text-sm px-4 py-2.5 rounded-lg bg-red-600 text-white font-medium">
+              Finish Test
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Sticky action footer — Next/Skip Section/Finish Test used to live
-          inside the scrolling question column, so on a long question they'd
-          scroll out of view along with it. Pinned here, outside any
-          scrolling area, so they're genuinely visible at all times, same as
-          the timer above. */}
-      <div className="sticky bottom-0 z-20 bg-white border-t border-slate-200 px-6 py-3">
+      {/* Action footer — a normal (non-sticky) flow child that never moves
+          because the root container above has a fixed height + overflow
+          hidden, so it can't be pushed off-screen by scrolling content.
+          Next Section/Finish Test live in the sidebar now, not here — see
+          the palette below, right under the question-number grid. */}
+      <div className="shrink-0 bg-white border-t border-slate-200 px-6 py-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex gap-2">
             <button
@@ -3300,15 +3324,6 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
               className="text-sm px-4 py-2.5 rounded-lg border border-slate-300 text-slate-600 bg-white disabled:opacity-40"
             >
               Next
-            </button>
-            <span className="w-px h-6 bg-slate-200 mx-1" />
-            {!isComposite && (
-              <button onClick={requestNextSection} className="text-sm px-5 py-2.5 rounded-lg border border-slate-300 text-slate-600 bg-white whitespace-nowrap">
-                {isLastSection ? "Finish exam" : `Next section: ${sections[sectionIdx + 1]?.label}`} →
-              </button>
-            )}
-            <button onClick={requestFinish} className="text-sm px-5 py-2.5 rounded-lg bg-red-600 text-white font-medium whitespace-nowrap">
-              Finish Test
             </button>
           </div>
         </div>
