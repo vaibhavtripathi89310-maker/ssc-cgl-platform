@@ -7094,20 +7094,15 @@ function SSCSyllabusShowcase() {
   );
 }
 
-// Small ascending line-chart used on the exam-picker hero (the screen right
-// after sign-in) — the line draws itself in (stroke-dash reveal), the area
-// fill fades in behind it, and each point pops in roughly as the line
-// reaches it, ending with a soft pulsing glow on the last point.
-// Deliberately carries no axis labels or numbers: it's visual energy about
-// "things trending up," never a stat or claim. Kept flat/short (viewBox
-// height 80, not 110) so this hero still fits one screen with no scrolling.
+// Small "before/after" line-chart used on the exam-picker hero (the screen
+// right after sign-in) — flat, then a marker pin for the moment the student
+// joined 100 Percentiler, then a visibly steeper line afterwards. The line
+// draws itself in (stroke-dash reveal), the marker pin/label pop in exactly
+// when the draw reaches that point, and the final point gets a soft pulsing
+// glow. No axis labels or numbers — it's a "your prep, before and after"
+// motif, not a stat or claim. Kept flat/short (viewBox height 80) so this
+// hero still fits one screen with no scrolling.
 function GrowthChartAnimation() {
-  const points = [
-    [24, 64],
-    [150, 45],
-    [270, 33],
-    [376, 15],
-  ];
   return (
     <div className="relative w-full max-w-md mx-auto mb-3 rounded-xl border border-blue-400/20 bg-blue-950/40 backdrop-blur p-2 pb-1 overflow-hidden growth-chart-card">
       <div className="growth-chart-grid absolute inset-2 rounded-lg" aria-hidden="true" />
@@ -7123,28 +7118,30 @@ function GrowthChartAnimation() {
           </linearGradient>
         </defs>
         <path
-          d="M24,64 C90,62 95,48 150,45 C205,42 215,36 270,33 C320,30 335,19 376,15 L376,73 L24,73 Z"
+          d="M24,70 C70,69 110,65 150,62 C230,52 300,18 376,4 L376,76 L24,76 Z"
           fill="url(#growthAreaGrad)"
           className="growth-chart-area"
         />
         <path
-          d="M24,64 C90,62 95,48 150,45 C205,42 215,36 270,33 C320,30 335,19 376,15"
+          d="M24,70 C70,69 110,65 150,62 C230,52 300,18 376,4"
           fill="none"
           stroke="url(#growthLineGrad)"
           strokeWidth="3.5"
           strokeLinecap="round"
           className="growth-chart-line"
         />
-        {points.map(([cx, cy], i) => (
-          <circle
-            key={i}
-            cx={cx}
-            cy={cy}
-            r={i === points.length - 1 ? 6 : 4.5}
-            fill={i === points.length - 1 ? "#e0f2fe" : "#bae6fd"}
-            className={`growth-chart-dot growth-chart-dot-${i}${i === points.length - 1 ? " growth-chart-dot-final" : ""}`}
-          />
-        ))}
+        {/* The "You joined" marker — a vertical guideline + label pinned at
+            the flat-to-steep kink, timed to pop in exactly as the line
+            reaches x=150 (roughly 35% along the path). */}
+        <line x1="150" y1="21" x2="150" y2="76" className="growth-chart-guideline" />
+        <circle cx="150" cy="62" r="5" fill="#fbbf24" className="growth-chart-marker-dot" />
+        <g className="growth-chart-pill">
+          <rect x="68" y="2" width="164" height="16" rx="8" fill="#0c1b3d" stroke="#fbbf24" strokeOpacity="0.4" />
+          <text x="150" y="10.5" textAnchor="middle" dominantBaseline="middle" fontSize="8.5" fontWeight="600" fill="#fde68a">
+            You joined 100 Percentiler
+          </text>
+        </g>
+        <circle cx="376" cy="4" r="6" fill="#e0f2fe" className="growth-chart-dot-final" />
       </svg>
     </div>
   );

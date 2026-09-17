@@ -178,12 +178,15 @@ body {
 }
 
 /* ============================================================================
-   SIGN-IN SCREEN — GROWTH CHART
-   Small ascending line-chart animation (SignInGrowthChart in App.jsx): the
-   line draws itself with a stroke-dash reveal, the area fill fades in behind
-   it, and each point pops in roughly as the line reaches it, ending with a
-   pulsing glow on the final point. Pure CSS, timed to feel like one
-   continuous sequence rather than separate effects firing at once.
+   EXAM-PICKER HERO — GROWTH CHART
+   Small "before/after" line-chart animation (GrowthChartAnimation in
+   App.jsx): the line draws itself with a stroke-dash reveal, a marker
+   pin/label pop in for the "You joined 100 Percentiler" moment right as the
+   draw reaches it, the area fill fades in behind the line, and the final
+   point gets a pulsing glow. Pure CSS, timed to feel like one continuous
+   sequence rather than separate effects firing at once. Delays below are
+   hand-tuned to roughly when the stroke-dash reveal (0.4s start, 1.8s
+   duration) passes each x position along the path.
    ============================================================================ */
 .growth-chart-card {
   animation: growthCardIn 0.6s ease-out both;
@@ -213,27 +216,59 @@ body {
 @keyframes growthAreaIn {
   to { opacity: 1; }
 }
-.growth-chart-dot {
+/* The line reaches x=150 (the marker) at roughly 35% of the path — about
+   1s after mount — so the guideline, dot, and label all pop in together
+   right then, as if the line just triggered them. */
+.growth-chart-guideline {
+  stroke: #93c5fd;
+  stroke-opacity: 0.4;
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  opacity: 0;
+  animation: growthFadeIn 0.4s ease-out 1.0s forwards;
+}
+.growth-chart-marker-dot {
   opacity: 0;
   transform-origin: center;
   transform-box: fill-box;
   transform: scale(0);
-  animation: growthDotIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation:
+    growthDotIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 1.0s forwards,
+    growthMarkerPulse 2s ease-in-out 1.6s infinite;
 }
-.growth-chart-dot-0 { animation-delay: 0.5s; }
-.growth-chart-dot-1 { animation-delay: 1.05s; }
-.growth-chart-dot-2 { animation-delay: 1.6s; }
+.growth-chart-pill {
+  opacity: 0;
+  transform-origin: center;
+  transform-box: fill-box;
+  transform: translateY(4px) scale(0.92);
+  animation: growthPillIn 0.4s ease-out 1.05s forwards;
+}
 .growth-chart-dot-final {
+  opacity: 0;
+  transform-origin: center;
+  transform-box: fill-box;
+  transform: scale(0);
   animation:
     growthDotIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 2.15s forwards,
     growthPulse 2s ease-in-out 2.7s infinite;
+}
+@keyframes growthFadeIn {
+  to { opacity: 1; }
+}
+@keyframes growthPillIn {
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes growthMarkerPulse {
+  0%, 100% { filter: drop-shadow(0 0 3px rgba(251,191,36,0.7)); }
+  50% { filter: drop-shadow(0 0 10px rgba(251,191,36,1)); }
 }
 @keyframes growthPulse {
   0%, 100% { filter: drop-shadow(0 0 3px rgba(224,242,254,0.7)); }
   50% { filter: drop-shadow(0 0 12px rgba(224,242,254,1)); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .growth-chart-card, .growth-chart-line, .growth-chart-area, .growth-chart-dot, .growth-chart-dot-final {
+  .growth-chart-card, .growth-chart-line, .growth-chart-area, .growth-chart-guideline,
+  .growth-chart-marker-dot, .growth-chart-pill, .growth-chart-dot-final {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;
