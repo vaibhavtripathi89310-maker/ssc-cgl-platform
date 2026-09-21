@@ -29,6 +29,26 @@ body {
   .geo-shooting-star { display: none; }
 }
 
+/* Sign-in card's floating robot mascot (FloatingRobotMascot in App.jsx) —
+   a continuous gentle bob + tilt on the outer wrapper (CSS only), while the
+   inner circular frame gets a separate cursor-parallax tilt driven by JS
+   (see the component) — two different elements, so the two transforms never
+   fight over the same property. */
+.robot-mascot-float {
+  animation: robotMascotBob 4s ease-in-out infinite;
+}
+@keyframes robotMascotBob {
+  0%, 100% { transform: translateY(0) rotate(-3deg); }
+  50% { transform: translateY(-12px) rotate(3deg); }
+}
+.robot-mascot-frame {
+  transition: transform 0.1s linear;
+}
+@media (prefers-reduced-motion: reduce) {
+  .robot-mascot-float { animation: none; }
+  .robot-mascot-frame { transition: none; }
+}
+
 /* Countdown ring next to "Time Left: mm:ss" in RunMockView's header (see
    RadialTimerRing in App.jsx). The transition makes the once-a-second
    re-render read as a smooth continuous drain instead of a jump; the pulse

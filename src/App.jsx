@@ -3,6 +3,7 @@ import heroCharacter from "./assets/hero-character.png";
 import logoImg from "./assets/logo.png";
 import signInBg from "./assets/sign-in-bg.png";
 import examPickerBg from "./assets/exam-picker-bg.png";
+import robotMascot from "./assets/robot-mascot.webp";
 import {
   LayoutDashboard, ListChecks, Plus, Search, Pencil, Eye, Copy, Trash2,
   CheckCircle2, XCircle, AlertCircle, ChevronUp, ChevronDown, Upload,
@@ -7683,6 +7684,74 @@ const GEO_CONNECTION_PAIRS = (() => {
 })();
 const GEO_CONNECT_DISTANCE = 190;
 
+// A small friendly mascot hovering just outside the sign-in card's top-right
+// corner — continuous gentle bob/tilt via CSS (see .robot-mascot-float in
+// index.css), plus a cursor-parallax "look toward you" tilt on top of that,
+// tracked with its own lightweight mousemove listener (deliberately not
+// wired into GeometricSignInBackground's physics loop — full pinball-style
+// velocity/collision would look chaotic for a character, not a shape). The
+// source image has a plain white canvas around the robot, not a transparent
+// cutout, so it's cropped into a circular glass frame (radial-gradient
+// backdrop + blur + glow ring) matching the sign-in card's own glassmorphism
+// — that reads as "a hologram in a lit porthole", not a stray white box.
+function FloatingRobotMascot() {
+  const wrapRef = useRef(null);
+  const frameRef = useRef(null);
+
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+    let target = { x: 0, y: 0 };
+    let current = { x: 0, y: 0 };
+    let rafId;
+
+    function handleMouseMove(e) {
+      const rect = wrap.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      // Normalized -1..1 offset of the cursor from this element's center,
+      // clamped so a far-off cursor doesn't over-rotate it.
+      const nx = Math.max(-1, Math.min(1, (e.clientX - cx) / 400));
+      const ny = Math.max(-1, Math.min(1, (e.clientY - cy) / 400));
+      target = { x: nx, y: ny };
+    }
+    window.addEventListener("mousemove", handleMouseMove);
+
+    function tick() {
+      current.x += (target.x - current.x) * 0.08;
+      current.y += (target.y - current.y) * 0.08;
+      const frame = frameRef.current;
+      if (frame) {
+        frame.style.transform = `perspective(600px) rotateY(${(current.x * 14).toFixed(2)}deg) rotateX(${(-current.y * 10).toFixed(2)}deg)`;
+      }
+      rafId = requestAnimationFrame(tick);
+    }
+    rafId = requestAnimationFrame(tick);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      cancelAnimationFrame(rafId);
+    };
+  }, []);
+
+  return (
+    <div
+      ref={wrapRef}
+      className="robot-mascot-float hidden sm:block absolute -top-14 -right-8 sm:-top-16 sm:-right-10 w-24 h-24 sm:w-28 sm:h-28 pointer-events-none"
+      aria-hidden="true"
+    >
+      <div
+        ref={frameRef}
+        className="robot-mascot-frame w-full h-full rounded-full overflow-hidden border-2 border-blue-300/50 shadow-[0_0_35px_rgba(96,165,250,0.55)]"
+        style={{ background: "radial-gradient(circle, rgba(59,130,246,0.35) 0%, rgba(30,58,138,0.55) 75%)" }}
+      >
+        <img src={robotMascot} alt="" className="w-full h-full object-cover scale-[1.35]" style={{ objectPosition: "38% 40%" }} />
+      </div>
+    </div>
+  );
+}
+
 function GeometricSignInBackground() {
   const containerRef = useRef(null);
   const shapeElsRef = useRef([]);
@@ -7975,6 +8044,7 @@ function StudentGate({ children }) {
           <div className="relative w-full max-w-5xl grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-8 items-center">
             <SSCSyllabusShowcase />
             <div className="order-1 lg:order-2 relative z-10 animate-fade-slide max-w-md w-full mx-auto lg:mx-0 bg-blue-950/60 backdrop-blur-md rounded-2xl p-8 text-center shadow-2xl shadow-blue-950/70 border border-blue-400/25">
+              <FloatingRobotMascot />
               <div className="inline-flex items-center gap-1.5 bg-blue-500/15 text-blue-200 border border-blue-400/30 text-xs font-medium px-3 py-1.5 rounded-full mb-5">
                 <Sparkles size={14} /> The 100 Percentiler
               </div>
