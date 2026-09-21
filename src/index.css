@@ -7,6 +7,28 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
+/* Occasional shooting-star streaks across the sign-in hero's star field
+   (GeometricSignInBackground) — an infrequent flourish, not constant
+   clutter, via a long cycle + staggered per-star delay. */
+.geo-shooting-star {
+  position: absolute;
+  width: 90px;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(224, 242, 254, 0.95) 100%);
+  border-radius: 999px;
+  pointer-events: none;
+  animation: geoShootingStar 9s linear infinite;
+}
+@keyframes geoShootingStar {
+  0% { transform: translate(0, 0) rotate(215deg); opacity: 0; }
+  2% { opacity: 1; }
+  9% { opacity: 0; }
+  100% { transform: translate(-480px, 350px) rotate(215deg); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .geo-shooting-star { display: none; }
+}
+
 /* Countdown ring next to "Time Left: mm:ss" in RunMockView's header (see
    RadialTimerRing in App.jsx). The transition makes the once-a-second
    re-render read as a smooth continuous drain instead of a jump; the pulse

@@ -7669,11 +7669,28 @@ function GeoStarField() {
 // single requestAnimationFrame loop that writes directly to each shape's
 // `style.transform` — never through React state — so 60fps motion never
 // triggers a re-render.
+// Every shape pair, precomputed once (16 shapes -> 120 pairs) — the
+// constellation lines in GeometricSignInBackground reuse this fixed set of
+// SVG <line> elements every frame (toggling opacity/endpoints) rather than
+// creating/destroying DOM nodes as shapes move in and out of range, which
+// would be far more expensive at 60fps.
+const GEO_CONNECTION_PAIRS = (() => {
+  const pairs = [];
+  for (let i = 0; i < GEO_SHAPE_DEFS.length; i++) {
+    for (let j = i + 1; j < GEO_SHAPE_DEFS.length; j++) pairs.push([i, j]);
+  }
+  return pairs;
+})();
+const GEO_CONNECT_DISTANCE = 190;
+
 function GeometricSignInBackground() {
   const containerRef = useRef(null);
   const shapeElsRef = useRef([]);
   const physicsRef = useRef([]);
   const cursorRef = useRef({ x: -9999, y: -9999 });
+  const lineElsRef = useRef([]);
+  const glowElRef = useRef(null);
+  const glowPosRef = useRef({ x: -9999, y: -9999 });
 
   useEffect(() => {
     const container = containerRef.current;
@@ -7695,10 +7712,42 @@ function GeometricSignInBackground() {
     });
 
     function paint() {
-      physicsRef.current.forEach((s, i) => {
+      const shapes = physicsRef.current;
+      shapes.forEach((s, i) => {
         const el = shapeElsRef.current[i];
         if (el) el.style.transform = `translate3d(${(s.x - s.r).toFixed(1)}px, ${(s.y - s.r).toFixed(1)}px, 0)`;
       });
+      // Constellation lines — a faint edge between any two shapes close
+      // enough to "connect", brighter the closer they are. Reads as a live
+      // network/circuit rather than just floating shapes.
+      GEO_CONNECTION_PAIRS.forEach(([i, j], idx) => {
+        const line = lineElsRef.current[idx];
+        if (!line) return;
+        const a = shapes[i], b = shapes[j];
+        const dist = Math.hypot(a.x - b.x, a.y - b.y);
+        if (dist < GEO_CONNECT_DISTANCE) {
+          line.setAttribute("x1", a.x.toFixed(1));
+          line.setAttribute("y1", a.y.toFixed(1));
+          line.setAttribute("x2", b.x.toFixed(1));
+          line.setAttribute("y2", b.y.toFixed(1));
+          line.style.opacity = (0.35 * (1 - dist / GEO_CONNECT_DISTANCE)).toFixed(2);
+        } else {
+          line.style.opacity = 0;
+        }
+      });
+      // Cursor-following glow — eased toward the real cursor position each
+      // frame rather than snapping, so it trails slightly instead of
+      // teleporting.
+      const glow = glowElRef.current;
+      if (glow) {
+        const cursor = cursorRef.current;
+        const gp = glowPosRef.current;
+        const offscreen = cursor.x < -1000;
+        gp.x += (cursor.x - gp.x) * 0.12;
+        gp.y += (cursor.y - gp.y) * 0.12;
+        glow.style.transform = `translate3d(${(gp.x - 220).toFixed(1)}px, ${(gp.y - 220).toFixed(1)}px, 0)`;
+        glow.style.opacity = offscreen ? 0 : 1;
+      }
     }
     paint();
 
@@ -7813,6 +7862,30 @@ function GeometricSignInBackground() {
         />
       ))}
       <GeoStarField />
+      <div className="geo-shooting-star" style={{ top: "8%", left: "70%", animationDelay: "0s" }} />
+      <div className="geo-shooting-star" style={{ top: "55%", left: "85%", animationDelay: "4.5s" }} />
+      {/* Cursor-following spotlight — a soft radial glow eased toward the
+          real cursor position each frame (see paint() above), giving direct
+          visual feedback that the background is actually reacting to you,
+          not just animating on its own. */}
+      <div
+        ref={glowElRef}
+        className="absolute top-0 left-0 w-[440px] h-[440px] rounded-full opacity-0 transition-opacity duration-300"
+        style={{ background: "radial-gradient(circle, rgba(96,165,250,0.16) 0%, rgba(96,165,250,0) 70%)" }}
+      />
+      {/* Constellation lines between nearby shapes — see GEO_CONNECTION_PAIRS
+          and the opacity/endpoint updates in paint() above. */}
+      <svg className="absolute inset-0 w-full h-full">
+        {GEO_CONNECTION_PAIRS.map(([i, j], idx) => (
+          <line
+            key={idx}
+            ref={(el) => (lineElsRef.current[idx] = el)}
+            stroke="rgba(147,197,253,0.9)"
+            strokeWidth="1"
+            style={{ opacity: 0 }}
+          />
+        ))}
+      </svg>
       {GEO_SHAPE_DEFS.map((d, i) => (
         <div
           key={i}
