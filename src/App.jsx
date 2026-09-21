@@ -7038,7 +7038,7 @@ function StudentApp() {
         <div className="relative overflow-hidden bg-gradient-to-br from-blue-950 via-blue-900 to-indigo-900 text-white px-6 py-16 sm:py-20">
           <div className="absolute -right-20 -top-20 w-80 h-80 bg-blue-400/20 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute -left-16 -bottom-20 w-72 h-72 bg-indigo-400/20 rounded-full blur-3xl pointer-events-none" />
-          <div className="relative max-w-5xl mx-auto text-center">
+          <div className="relative max-w-7xl mx-auto text-center">
             <div className="inline-flex items-center gap-1.5 bg-white/10 backdrop-blur text-blue-100 text-xs font-medium px-3 py-1.5 rounded-full mb-5">
               <Sparkles size={13} /> The 100 Percentiler
             </div>
@@ -7049,13 +7049,14 @@ function StudentApp() {
           </div>
         </div>
 
-        <main className="max-w-5xl mx-auto px-6 -mt-10 pb-16 relative">
-          {/* flex+justify-center instead of a fixed 3-col grid — with
-              GMAT/SNAP hidden by default (see GmatSnapToggle), a strict grid
-              left a single SSC CGL card stranded in one corner with a huge
-              empty gap next to it. This centers however many exams are
-              actually visible, 1 or 3. */}
-          <div className="flex flex-wrap justify-center gap-6">
+        <main className="max-w-7xl mx-auto px-6 -mt-10 pb-16 relative">
+          {/* A real grid, not fixed-width cards — this branch only ever
+              renders once there are 2+ exams to choose from (the single-exam
+              case has its own dedicated hero above), so there's no risk of a
+              lone stranded card. auto-fit lets it use however much width the
+              screen actually has instead of capping at a couple of narrow
+              fixed-width columns. */}
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-6">
             {availableExams.map((exam) => {
               const theme = EXAM_THEME[exam.key];
               const Icon = theme.icon;
@@ -7064,7 +7065,7 @@ function StudentApp() {
                 <button
                   key={exam.key}
                   onClick={() => chooseExam(exam.key)}
-                  className={`group relative bg-white border border-slate-200 rounded-3xl p-7 text-left shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden w-full sm:w-80 ${theme.ring}`}
+                  className={`group relative bg-white border border-slate-200 rounded-3xl p-7 text-left shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden ${theme.ring}`}
                 >
                   <div className={`absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r ${theme.gradient}`} />
                   <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 ${theme.iconBg}`}>
