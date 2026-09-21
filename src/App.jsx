@@ -10,7 +10,7 @@ import {
   TrendingUp, Target, Youtube, Trophy, Flame, Share2, BarChart2,
   Swords, ThumbsUp, ThumbsDown, Link2, Activity,
   Landmark, GraduationCap, Award, Sparkles, FileText, Layers, BookOpen, Users,
-  Zap, ShieldCheck, MousePointerClick, Puzzle, Calculator, Bell, BellOff,
+  Zap, ShieldCheck, MousePointerClick, Puzzle, Calculator, Bell, BellOff, ScrollText,
 } from "lucide-react";
 import {
   loadMocksIndex, saveMocksIndex, loadMockQuestions, saveMockQuestions, deleteMockQuestions,
@@ -260,6 +260,43 @@ const EXAMS = {
     // `isComposite` branches.
     timerMode: "composite",
   },
+  uppcs: {
+    key: "uppcs",
+    label: "UPPCS",
+    tagline: "UPPCS Prelims — GS Paper I & GS Paper II (CSAT).",
+    sections: [
+      // Real UPPCS Prelims pattern (verified): Paper I counts toward merit,
+      // Paper II (CSAT) is qualifying-only (33% required) and its marks
+      // never count toward the score — see `qualifyingOnly` below, and
+      // computeResults() in RunMockView which reads marksPerQuestion /
+      // negativeMarkingPerQuestion directly off these sections instead of
+      // the usual mock-wide uniform formula (every other exam has the same
+      // marks-per-question in every section, UPPCS's two papers don't).
+      { key: "gs_paper_1", label: "GS Paper I", short: "GS-1", questionCount: 150, marksPerQuestion: 200 / 150, negativeMarkingPerQuestion: 200 / 150 / 3 },
+      {
+        key: "gs_paper_2_csat",
+        label: "GS Paper II (CSAT)",
+        short: "CSAT",
+        questionCount: 100,
+        marksPerQuestion: 2,
+        negativeMarkingPerQuestion: 2 / 3,
+        qualifyingOnly: true,
+        qualifyingThresholdPct: 33,
+      },
+    ],
+    hasNegativeMarking: true,
+    // Marks/negative-marking come from the sections above (each paper has a
+    // different marks-per-question), not from one admin-typed mock-wide
+    // value — see MockEditorView's `perSectionMarking` branch.
+    perSectionMarking: true,
+    defaultNegativeMarking: 0,
+    fullDuration: 240, // 120 min per paper
+    fullTotalMarks: 200, // Paper I only — CSAT is qualifying, excluded from merit marks
+    // Two separate timed sittings on the real exam, not sub-sections of one
+    // continuous paper — locked, one-way per-paper timer, same model SSC
+    // CGL/GMAT already use.
+    timerMode: "sectional",
+  },
 };
 const EXAM_LIST = Object.values(EXAMS);
 const DEFAULT_EXAM = "ssc_cgl";
@@ -288,6 +325,13 @@ const EXAM_THEME = {
     ring: "hover:border-emerald-300",
     badgeBg: "bg-emerald-50 text-emerald-700",
     iconBg: "bg-emerald-100 text-emerald-700",
+  },
+  uppcs: {
+    icon: ScrollText,
+    gradient: "from-rose-600 to-orange-700",
+    ring: "hover:border-rose-300",
+    badgeBg: "bg-rose-50 text-rose-700",
+    iconBg: "bg-rose-100 text-rose-700",
   },
 };
 // Flat list of every section across every exam — safe to use wherever a
@@ -1226,7 +1270,9 @@ function ImportDataView({ onImport }) {
 }
 
 // SSC CGL always shows as an exam choice on the student side; this is the
-// one switch that decides whether GMAT and SNAP show up alongside it.
+// one switch that decides whether every other exam (GMAT, SNAP, UPPCS, and
+// any future one) shows up alongside it — see `availableExams` in
+// StudentApp, which gates on `exam.key === DEFAULT_EXAM || gmatSnapEnabled`.
 // Same on/off/loading pattern as the Practice Ground toggle in
 // PracticeBankView, just against a different app_settings key.
 function GmatSnapToggle() {
@@ -1261,7 +1307,7 @@ function GmatSnapToggle() {
     <div className={`flex items-center justify-between gap-3 border rounded-lg px-4 py-3 mb-8 ${enabled ? "bg-emerald-50 border-emerald-200" : "bg-slate-100 border-slate-200"}`}>
       <div>
         <div className="text-sm font-medium text-slate-800">
-          {enabled ? "GMAT & SNAP are visible to students" : "GMAT & SNAP are hidden from students"}
+          {enabled ? "Other exams (GMAT, SNAP, UPPCS) are visible to students" : "Other exams (GMAT, SNAP, UPPCS) are hidden from students"}
         </div>
         <div className="text-xs text-slate-500 mt-0.5">
           {enabled
@@ -1504,6 +1550,13 @@ function MockEditorView({ mock, questions, onSaveMeta, onOpenSection, onTogglePu
       exam: examKey,
       sectionalKey: null,
       negativeMarking: exam.hasNegativeMarking ? exam.defaultNegativeMarking : 0,
+      // Also reset duration/totalMarks to this exam's real full-mock figures
+      // — previously only negativeMarking reset on an exam switch, leaving
+      // duration/totalMarks stuck at whatever the old exam used (e.g. an
+      // admin switching to UPPCS would otherwise keep SSC CGL's 60min/200
+      // instead of UPPCS's real 240min/200).
+      duration: exam.fullDuration,
+      totalMarks: exam.fullTotalMarks,
     }));
     setSaved(false);
     onDirtyChange(true);
@@ -1639,11 +1692,21 @@ function MockEditorView({ mock, questions, onSaveMeta, onOpenSection, onTogglePu
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-500 mb-1">Total marks</label>
-            <input type="number" value={form.totalMarks} onChange={(e) => update("totalMarks", Number(e.target.value))} className="w-full text-sm border border-slate-200 rounded-md px-3 py-2" />
+            {examConfig.perSectionMarking ? (
+              <div className="w-full text-sm border border-slate-100 bg-slate-50 text-slate-400 rounded-md px-3 py-2">
+                {form.totalMarks} — fixed by {examConfig.label}'s real marking scheme
+              </div>
+            ) : (
+              <input type="number" value={form.totalMarks} onChange={(e) => update("totalMarks", Number(e.target.value))} className="w-full text-sm border border-slate-200 rounded-md px-3 py-2" />
+            )}
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-500 mb-1">Negative marking</label>
-            {examConfig.hasNegativeMarking ? (
+            {examConfig.perSectionMarking ? (
+              <div className="w-full text-sm border border-slate-100 bg-slate-50 text-slate-400 rounded-md px-3 py-2">
+                Set per-paper — {examConfig.label} awards different marks per question in each paper
+              </div>
+            ) : examConfig.hasNegativeMarking ? (
               <input type="number" step="0.25" value={form.negativeMarking} onChange={(e) => update("negativeMarking", Number(e.target.value))} className="w-full text-sm border border-slate-200 rounded-md px-3 py-2" />
             ) : (
               <div className="w-full text-sm border border-slate-100 bg-slate-50 text-slate-400 rounded-md px-3 py-2">
@@ -2687,10 +2750,19 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
     // Marks per correct answer isn't hardcoded to SSC CGL's "+2" scheme — it's
     // derived from this mock's own total marks spread across its questions,
     // so it works whether an exam awards 2 marks per question (SSC CGL) or 1
-    // (GMAT, which has no negative marking either).
+    // (GMAT, which has no negative marking either). This is the FALLBACK used
+    // when a section doesn't specify its own marksPerQuestion (every exam
+    // except UPPCS, whose two papers award different marks per question —
+    // see the section-level override below).
     const totalQuestionCount = sections.reduce((sum, s) => sum + (questions[s.key]?.length || 0), 0);
     const marksPerCorrect = totalQuestionCount > 0 ? mock.totalMarks / totalQuestionCount : 1;
     let correct = 0, incorrect = 0, skipped = 0;
+    // The displayed/saved "score" only ever sums NON-qualifying sections —
+    // for every exam except UPPCS every section is non-qualifying, so this
+    // is identical to summing all of them (unchanged behavior). For UPPCS,
+    // GS Paper II (CSAT) is qualifying-only and never contributes marks,
+    // matching the real exam's "selection is on Paper I alone" rule.
+    let score = 0;
     const sectionBreakdown = sections.map((s) => {
       let sCorrect = 0, sIncorrect = 0, sSkipped = 0;
       (questions[s.key] || []).forEach((qq) => {
@@ -2702,9 +2774,21 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
       correct += sCorrect;
       incorrect += sIncorrect;
       skipped += sSkipped;
-      return { label: s.label, correct: sCorrect, incorrect: sIncorrect, skipped: sSkipped, score: sCorrect * marksPerCorrect - sIncorrect * mock.negativeMarking };
+      const perQuestion = s.marksPerQuestion ?? marksPerCorrect;
+      const perQuestionNegative = s.marksPerQuestion ? s.negativeMarkingPerQuestion : mock.negativeMarking;
+      const sScore = sCorrect * perQuestion - sIncorrect * perQuestionNegative;
+      const sMaxMarks = perQuestion * (questions[s.key]?.length || 0);
+      if (!s.qualifyingOnly) score += sScore;
+      return {
+        label: s.label,
+        correct: sCorrect,
+        incorrect: sIncorrect,
+        skipped: sSkipped,
+        score: sScore,
+        qualifying: !!s.qualifyingOnly,
+        qualified: s.qualifyingOnly ? (sMaxMarks > 0 ? (sScore / sMaxMarks) * 100 : 0) >= s.qualifyingThresholdPct : null,
+      };
     });
-    const score = correct * marksPerCorrect - incorrect * mock.negativeMarking;
 
     // Topic-wise performance — groups by each question's tagged topic, or
     // falls back to its section label when no topic was set on it (so this
@@ -4994,8 +5078,22 @@ function ScoreCounter({ value }) {
 function ResultsHero({ mock, score, correct, incorrect, skipped, percentile, isPersonalBest, sectionBreakdown, sections, onExit, onJumpReview }) {
   const [tab, setTab] = useState("overall");
   const sectionIdx = sections.findIndex((s) => s.key === tab);
-  const isSectionTab = sectionIdx >= 0;
-  const stats = isSectionTab ? sectionBreakdown[sectionIdx] : { correct, incorrect, skipped, score };
+  // A Sectional Mock made of ONLY a qualifying-only section (e.g. a
+  // standalone "CSAT Practice" mock, with no other section to blend it
+  // with) has nothing meaningful to show as a merit score — `score` would
+  // just be 0 always, since qualifying sections never contribute to it.
+  // Force the section-view (qualified/not-qualified badge) to render even
+  // on the "overall" pseudo-tab in that one case, rather than a
+  // misleading "0 / totalMarks".
+  const soleQualifyingSection = sections.length === 1 && sectionBreakdown[0]?.qualifying ? 0 : -1;
+  const isSectionTab = sectionIdx >= 0 || soleQualifyingSection >= 0;
+  const activeSectionIdx = sectionIdx >= 0 ? sectionIdx : soleQualifyingSection;
+  const stats = isSectionTab ? sectionBreakdown[activeSectionIdx] : { correct, incorrect, skipped, score };
+  // UPPCS-style exams have one qualifying-only section (e.g. CSAT) whose
+  // marks never count toward `score` — surfaced as a Qualified/Not
+  // Qualified badge instead of a marks contribution. Every other exam has
+  // no qualifying sections, so this is simply undefined for them.
+  const qualifyingSection = sectionBreakdown.find((s) => s.qualifying);
   const attempted = stats.correct + stats.incorrect;
   const accuracyPct = attempted ? Math.round((stats.correct / attempted) * 100) : 0;
   const pieData = [
@@ -5064,6 +5162,18 @@ function ResultsHero({ mock, score, correct, incorrect, skipped, percentile, isP
                         <Trophy size={12} /> New personal best
                       </div>
                     )}
+                    {qualifyingSection && (
+                      <div
+                        className={`inline-flex items-center gap-1 text-xs font-semibold px-3 py-1 rounded-full border ${
+                          qualifyingSection.qualified
+                            ? "bg-emerald-400/20 border-emerald-300/40 text-emerald-200"
+                            : "bg-red-400/20 border-red-300/40 text-red-200"
+                        }`}
+                      >
+                        {qualifyingSection.qualified ? <CheckCircle2 size={12} /> : <XCircle size={12} />}
+                        {qualifyingSection.label}: {qualifyingSection.qualified ? "Qualified" : "Not qualified"}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <button onClick={() => correct > 0 && onJumpReview("correct")} disabled={correct === 0} className="text-left disabled:cursor-default group">
@@ -5097,10 +5207,10 @@ function ResultsHero({ mock, score, correct, incorrect, skipped, percentile, isP
               </ResponsiveContainer>
               <div>
                 <div className="text-4xl font-bold cursor-default hover:scale-105 transition-transform duration-200 inline-block">{accuracyPct}%</div>
-                <div className="text-xs text-blue-200 mb-3">Accuracy in {sections[sectionIdx].label}</div>
+                <div className="text-xs text-blue-200 mb-3">Accuracy in {sections[activeSectionIdx].label}</div>
                 <div className="grid grid-cols-3 gap-2 text-center max-w-xs">
                   <button
-                    onClick={() => stats.correct > 0 && onJumpReview("correct", sections[sectionIdx].key)}
+                    onClick={() => stats.correct > 0 && onJumpReview("correct", sections[activeSectionIdx].key)}
                     disabled={stats.correct === 0}
                     className="bg-white/10 rounded-lg py-2 hover:bg-white/20 transition-colors disabled:cursor-default disabled:hover:bg-white/10 group"
                   >
@@ -5108,7 +5218,7 @@ function ResultsHero({ mock, score, correct, incorrect, skipped, percentile, isP
                     <div className="text-[10px] text-blue-200">Correct</div>
                   </button>
                   <button
-                    onClick={() => stats.incorrect > 0 && onJumpReview("incorrect", sections[sectionIdx].key)}
+                    onClick={() => stats.incorrect > 0 && onJumpReview("incorrect", sections[activeSectionIdx].key)}
                     disabled={stats.incorrect === 0}
                     className="bg-white/10 rounded-lg py-2 hover:bg-white/20 transition-colors disabled:cursor-default disabled:hover:bg-white/10 group"
                   >
@@ -5116,7 +5226,7 @@ function ResultsHero({ mock, score, correct, incorrect, skipped, percentile, isP
                     <div className="text-[10px] text-blue-200">Incorrect</div>
                   </button>
                   <button
-                    onClick={() => stats.skipped > 0 && onJumpReview("skipped", sections[sectionIdx].key)}
+                    onClick={() => stats.skipped > 0 && onJumpReview("skipped", sections[activeSectionIdx].key)}
                     disabled={stats.skipped === 0}
                     className="bg-white/10 rounded-lg py-2 hover:bg-white/20 transition-colors disabled:cursor-default disabled:hover:bg-white/10 group"
                   >
@@ -5124,9 +5234,28 @@ function ResultsHero({ mock, score, correct, incorrect, skipped, percentile, isP
                     <div className="text-[10px] text-blue-200">Skipped</div>
                   </button>
                 </div>
-                <div className="text-xs text-blue-200 mt-3">
-                  Score in this section: <span className="font-medium text-white">{stats.score}</span>
-                </div>
+                {stats.qualifying ? (
+                  <div className="mt-3">
+                    <div
+                      className={`inline-flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-full border ${
+                        stats.qualified
+                          ? "bg-emerald-400/20 border-emerald-300/40 text-emerald-200"
+                          : "bg-red-400/20 border-red-300/40 text-red-200"
+                      }`}
+                    >
+                      {stats.qualified ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
+                      {stats.qualified ? "Qualified" : "Not qualified"}
+                    </div>
+                    <div className="text-xs text-blue-200 mt-2">
+                      This paper is qualifying only — its marks don't count toward your score, but
+                      you need at least 33% here to qualify.
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-xs text-blue-200 mt-3">
+                    Score in this section: <span className="font-medium text-white">{stats.score}</span>
+                  </div>
+                )}
               </div>
             </div>
           )}
