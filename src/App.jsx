@@ -260,21 +260,47 @@ const EXAMS = {
     // `isComposite` branches.
     timerMode: "composite",
   },
-  uppcs: {
-    key: "uppcs",
-    label: "UPPCS",
-    tagline: "UPPCS Prelims — GS Paper I & GS Paper II (CSAT).",
+  // UPPCS's two Prelims papers are genuinely separate exams in real life —
+  // different sittings, different candidates sometimes only taking one,
+  // different purpose (Paper I counts toward merit, Paper II/CSAT is
+  // qualifying-only). Modeled as two independent exams here (each with a
+  // single section that IS the whole paper), not as one "UPPCS" exam with
+  // two locked sections — so each gets its own normal Full Mock flow with
+  // direct question upload, same as SSC CGL/GMAT/SNAP. The "UPPCS" prefix
+  // in both labels is what signals they're the same domain; there's no
+  // grouping concept in EXAM_LIST/EXAM_THEME beyond that (both also share
+  // the rose/orange theme family — see EXAM_THEME below).
+  uppcs_gs1: {
+    key: "uppcs_gs1",
+    label: "UPPCS GS Paper I",
+    tagline: "UPPCS Prelims — General Studies Paper I.",
     sections: [
-      // Real UPPCS Prelims pattern (verified): Paper I counts toward merit,
-      // Paper II (CSAT) is qualifying-only (33% required) and its marks
-      // never count toward the score — see `qualifyingOnly` below, and
-      // computeResults() in RunMockView which reads marksPerQuestion /
-      // negativeMarkingPerQuestion directly off these sections instead of
-      // the usual mock-wide uniform formula (every other exam has the same
-      // marks-per-question in every section, UPPCS's two papers don't).
-      { key: "gs_paper_1", label: "GS Paper I", short: "GS-1", questionCount: 150, marksPerQuestion: 200 / 150, negativeMarkingPerQuestion: 200 / 150 / 3 },
+      // Real UPPCS Prelims pattern (verified): 150 questions, 200 marks,
+      // 2 hours, 1/3rd negative marking per wrong answer.
+      { key: "uppcs_gs1_paper", label: "GS Paper I", short: "GS-1", questionCount: 150, marksPerQuestion: 200 / 150, negativeMarkingPerQuestion: 200 / 150 / 3 },
+    ],
+    hasNegativeMarking: true,
+    // Marks/negative-marking come from the section above (matches the real
+    // exam's fixed pattern), not a free-typed mock-wide value — see
+    // MockEditorView's `perSectionMarking` branch.
+    perSectionMarking: true,
+    defaultNegativeMarking: 0,
+    fullDuration: 120,
+    fullTotalMarks: 200,
+    timerMode: "sectional",
+  },
+  uppcs_gs2: {
+    key: "uppcs_gs2",
+    label: "UPPCS GS Paper II (CSAT)",
+    tagline: "UPPCS Prelims — General Studies Paper II (CSAT), qualifying only.",
+    sections: [
+      // Real UPPCS Prelims pattern (verified): 100 questions, 200 marks,
+      // 2 hours, 1/3rd negative marking per wrong answer. Qualifying only
+      // on the real exam (33% required) — see `qualifyingOnly` below and
+      // computeResults() in RunMockView, which shows a Qualified/Not
+      // Qualified badge instead of treating this as just a plain score.
       {
-        key: "gs_paper_2_csat",
+        key: "uppcs_gs2_paper",
         label: "GS Paper II (CSAT)",
         short: "CSAT",
         questionCount: 100,
@@ -285,16 +311,10 @@ const EXAMS = {
       },
     ],
     hasNegativeMarking: true,
-    // Marks/negative-marking come from the sections above (each paper has a
-    // different marks-per-question), not from one admin-typed mock-wide
-    // value — see MockEditorView's `perSectionMarking` branch.
     perSectionMarking: true,
     defaultNegativeMarking: 0,
-    fullDuration: 240, // 120 min per paper
-    fullTotalMarks: 200, // Paper I only — CSAT is qualifying, excluded from merit marks
-    // Two separate timed sittings on the real exam, not sub-sections of one
-    // continuous paper — locked, one-way per-paper timer, same model SSC
-    // CGL/GMAT already use.
+    fullDuration: 120,
+    fullTotalMarks: 200,
     timerMode: "sectional",
   },
 };
@@ -326,12 +346,22 @@ const EXAM_THEME = {
     badgeBg: "bg-emerald-50 text-emerald-700",
     iconBg: "bg-emerald-100 text-emerald-700",
   },
-  uppcs: {
+  // Same rose/orange family for both UPPCS papers — the shared color (plus
+  // the shared "UPPCS" label prefix) is what visually signals they're the
+  // same domain, since EXAM_LIST/EXAM_THEME have no actual grouping concept.
+  uppcs_gs1: {
     icon: ScrollText,
     gradient: "from-rose-600 to-orange-700",
     ring: "hover:border-rose-300",
     badgeBg: "bg-rose-50 text-rose-700",
     iconBg: "bg-rose-100 text-rose-700",
+  },
+  uppcs_gs2: {
+    icon: FileText,
+    gradient: "from-orange-600 to-amber-700",
+    ring: "hover:border-orange-300",
+    badgeBg: "bg-orange-50 text-orange-700",
+    iconBg: "bg-orange-100 text-orange-700",
   },
 };
 // Flat list of every section across every exam — safe to use wherever a
@@ -2757,11 +2787,15 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
     const totalQuestionCount = sections.reduce((sum, s) => sum + (questions[s.key]?.length || 0), 0);
     const marksPerCorrect = totalQuestionCount > 0 ? mock.totalMarks / totalQuestionCount : 1;
     let correct = 0, incorrect = 0, skipped = 0;
-    // The displayed/saved "score" only ever sums NON-qualifying sections —
-    // for every exam except UPPCS every section is non-qualifying, so this
-    // is identical to summing all of them (unchanged behavior). For UPPCS,
-    // GS Paper II (CSAT) is qualifying-only and never contributes marks,
-    // matching the real exam's "selection is on Paper I alone" rule.
+    // The displayed/saved "score" excludes qualifying-only sections' marks —
+    // but ONLY when there's a non-qualifying section to represent merit
+    // instead (e.g. a mock combining GS Paper I + CSAT). A mock made
+    // ENTIRELY of qualifying sections (UPPCS's standalone GS Paper II/CSAT
+    // exam, which has nothing else) has nothing else to fall back to, so
+    // its own marks count as the score — otherwise every CSAT attempt would
+    // save as 0 and the leaderboard/percentile would be meaningless. The
+    // qualifying/qualified fields below are unaffected either way.
+    const hasNonQualifyingSection = sections.some((s) => !s.qualifyingOnly);
     let score = 0;
     const sectionBreakdown = sections.map((s) => {
       let sCorrect = 0, sIncorrect = 0, sSkipped = 0;
@@ -2778,7 +2812,7 @@ function RunMockView({ mock, questions, onExit, challengeId, adminMode = false }
       const perQuestionNegative = s.marksPerQuestion ? s.negativeMarkingPerQuestion : mock.negativeMarking;
       const sScore = sCorrect * perQuestion - sIncorrect * perQuestionNegative;
       const sMaxMarks = perQuestion * (questions[s.key]?.length || 0);
-      if (!s.qualifyingOnly) score += sScore;
+      if (!s.qualifyingOnly || !hasNonQualifyingSection) score += sScore;
       return {
         label: s.label,
         correct: sCorrect,
@@ -5078,16 +5112,8 @@ function ScoreCounter({ value }) {
 function ResultsHero({ mock, score, correct, incorrect, skipped, percentile, isPersonalBest, sectionBreakdown, sections, onExit, onJumpReview }) {
   const [tab, setTab] = useState("overall");
   const sectionIdx = sections.findIndex((s) => s.key === tab);
-  // A Sectional Mock made of ONLY a qualifying-only section (e.g. a
-  // standalone "CSAT Practice" mock, with no other section to blend it
-  // with) has nothing meaningful to show as a merit score — `score` would
-  // just be 0 always, since qualifying sections never contribute to it.
-  // Force the section-view (qualified/not-qualified badge) to render even
-  // on the "overall" pseudo-tab in that one case, rather than a
-  // misleading "0 / totalMarks".
-  const soleQualifyingSection = sections.length === 1 && sectionBreakdown[0]?.qualifying ? 0 : -1;
-  const isSectionTab = sectionIdx >= 0 || soleQualifyingSection >= 0;
-  const activeSectionIdx = sectionIdx >= 0 ? sectionIdx : soleQualifyingSection;
+  const isSectionTab = sectionIdx >= 0;
+  const activeSectionIdx = sectionIdx;
   const stats = isSectionTab ? sectionBreakdown[activeSectionIdx] : { correct, incorrect, skipped, score };
   // UPPCS-style exams have one qualifying-only section (e.g. CSAT) whose
   // marks never count toward `score` — surfaced as a Qualified/Not
