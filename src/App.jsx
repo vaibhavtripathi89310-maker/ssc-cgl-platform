@@ -1734,7 +1734,9 @@ function MockEditorView({ mock, questions, onSaveMeta, onOpenSection, onTogglePu
             <label className="block text-xs font-medium text-slate-500 mb-1">Negative marking</label>
             {examConfig.perSectionMarking ? (
               <div className="w-full text-sm border border-slate-100 bg-slate-50 text-slate-400 rounded-md px-3 py-2">
-                Set per-paper — {examConfig.label} awards different marks per question in each paper
+                {examConfig.sections.length === 1
+                  ? `Fixed at −${examConfig.sections[0].negativeMarkingPerQuestion.toFixed(2)} per wrong answer — ${examConfig.label}'s real marking scheme`
+                  : `Fixed per paper — ${examConfig.label}'s real marking scheme (each paper has its own rate)`}
               </div>
             ) : examConfig.hasNegativeMarking ? (
               <input type="number" step="0.25" value={form.negativeMarking} onChange={(e) => update("negativeMarking", Number(e.target.value))} className="w-full text-sm border border-slate-200 rounded-md px-3 py-2" />
